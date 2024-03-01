@@ -14,7 +14,7 @@ random.seed(42)
 
 if __name__ == "__main__":
     radius = 12
-    n_poly = 4
+    n_poly = 6
     poly_sizes = [24, 24, 36, 36, 48, 48]
 
     nucleus = Sphere(position=[0, 0, 0], radius=radius)
