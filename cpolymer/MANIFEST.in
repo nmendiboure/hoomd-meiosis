@@ -1,0 +1,3 @@
+recursive-include  cpolymer *.py
+recursive-include  cpolymer *.txt
+prune cpolymer/test
