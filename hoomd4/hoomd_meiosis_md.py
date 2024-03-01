@@ -7,29 +7,14 @@ import os
 import numpy as np
 import random as rdn
 
+from utils import is_debug
+
 
 """
 ############################################
 #####             Functions            #####
 ############################################
 """
-
-
-def is_debug() -> bool:
-    """
-    Function to see if the script is running in debug mode.
-    """
-    gettrace = getattr(sys, 'gettrace', None)
-
-    if gettrace is None:
-        return False
-    else:
-        v = gettrace()
-        if v is None:
-            return False
-        else:
-            return True
-
 
 def init_grid(
         r: int | float,
