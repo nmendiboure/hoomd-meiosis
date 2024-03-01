@@ -348,17 +348,24 @@ def simulate(syst, n_steps, data_folder="./repli", params={}, seed=False):
                             #system.bonds.remove(bond_number)  #supprimer le bond         
  
     #Enregistrer forces, distance et positions particules homologues
+    if not os.path.exists("./forces"):
+        os.makedirs("./forces")
     list=os.listdir("./forces")
     i = 0
     while "force_simul"+str(i)+".npy" in list : 
         i += 1            
     np.save("./forces/force_simul"+str(i)+".npy", force)
     np.save("./forces/homo_kept_"+str(i)+".npy", Homologues_kept)
-    
+
+    if not os.path.exists("./distance"):
+        os.makedirs("./distance")
     list_1=os.listdir("./distance")
     j=0
     while "pos_xyz"+str(j)+".npy" in list_1 : 
-        j += 1            
+        j += 1
+
+    if not os.path.exists("./positions"):
+        os.makedirs("./positions")
     np.save("./positions/pos_xyz"+str(j)+".npy", pos_xyz)
     np.save("./positions/syst_len"+str(j)+".npy",syst["len_polymers"])
     
@@ -367,7 +374,7 @@ def simulate(syst, n_steps, data_folder="./repli", params={}, seed=False):
 
 def test_one(attached=True, args={}):
     syst = {}
-    syst["len_polymers"] = [int(i) for i in args["lengthp"] for _ in range(2)]
+    syst["len_polymers"] = [int(i) for i in args["len"] for _ in range(2)]
     syst["density"] = args["density"] 
     syst["verbose"] = False 
     syst["attached"] = attached
@@ -379,13 +386,23 @@ def test_one(attached=True, args={}):
 
 if __name__ == "__main__":
 
+    """
+    --cpu 
+    --nsteps 5000
+    --len 24  
+    --len 30 
+    --len 45 
+    --density 0.001 
+    --root meiose
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--cpu', action="store_true")
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--attached', action="store_true")
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--nsteps', type=int, default=1000)
-    parser.add_argument("-len", "--lengthp", action='append', required=True)
+    parser.add_argument("--len", action='append', required=True)
     parser.add_argument('--density', type=float, default=0.05)
 
     parser.add_argument('--root', type=str, default="./repli")
@@ -402,5 +419,4 @@ if __name__ == "__main__":
     hoomd.context.initialize(init_cmd)
     my_dict = args.__dict__
 
-                         
     test_one(attached=args.attached, args=args.__dict__)
