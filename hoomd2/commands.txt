@@ -1,0 +1,46 @@
+Pour enregistrer les forces, la distances et les positions des liens entre particules homologues, tu dois créer trois dossiers dans ton répertoires courant , un dossier "forces", "distances" et "positions".
+
+J'ai ajouté au tout début du code les paramètres sur lesquels tu peux jouer pour la simulation
+
+nb_bond=100 #nombre de cassures dans ADN
+longueur_de_persistance = 10 #pour jouer sur la raideur et la mobilité des chaîne de chromosomes
+distance_requise_pour_bond_homologues = 1.2 #distance à partir de laquelle deux particules homologues se lient 
+
+
+
+#############
+Commande : 
+python 3 tmpdir/dynamic_bond_ci_3d.py --cpu --nsteps 500 --lengthp 24  --lengthp 30 --lengthp 45 --density 0.001 --root meiose/
+
+Pour choisir:
+- nombre de steps voulu : modifier le nombre après nsteps (ici on fait 500 steps)
+- Longueur paire de chromosome 1 : 24 molécules d'ADN
+- Longueur paire de chromosome 2 : 30 molécules d'ADN 
+- Longueur paire de chromosome 3 : 45 molécules d'ADN
+ Ainsi de suite si tu veux ajouter des paires de chromosomes
+-La densité , ici elle est prise égale à 0.001 pour permettre de simuler plusieurs paires de chromosomes d'une taille >20 molécules d'adn
+Tu peux choisir une densité de 0.01 mais tu ne pourra pas simuler plusieurs paires de chromosomes d'une taille >20 molécules d'adn, car tu aura une erreur de dimensions. 
+De manière générale, tu peux explorer et tester pkusieurs densités pour voir comment ça se comporte.
+
+
+A la suite de cette commande , un dossier meiose sera créer dans ton dossier courant, avec un fichier poly_d.gsd à l'intérieur. 
+Tu dois installer ovito, et charger ce fichier en allant dans l'onglet file, puis tu choisis load et file et tu sélectionne le fichier .gsd
+
+Tu aura quelques réglages manuels à faire sur Ovito pour avoir une représentation comme celle que j'ai mis dans mon rapport.
+Sur Ovito, tu trouvera une petite fenêtre à droite, tu peux aller dans le liste Data source et choisir Particle type, et ainsi tu peux
+modifier la taille de la paricule box (celle qui modélise la cellule) et changer son display radius, ici tu pourra ajuster les réglages en fonction du nombre de 
+chaines de chromosomes tu as, (tu peux essayer 8, le but etant de permettre aux chromosomes d'être à l'intérieur de la sphère, les chaînes de chromosomes subissent une force
+ qui contraint les télomères à la sphère, l'objectif est de trouver une valeur pour le display radius qui inclus chomosomes à l'intérieur de la sphère tout en maintenant 
+les télomères proches de la circonférence de la sphère.
+
+Ensuite, il faut paramétrer l'opcaité des particules. Je n'avais pas trouvé de moyen de rendre uniquement la particle bax transparentes sans toucher à l'opacité des autres particules,
+donc par défaut j'ai modifié l'opacité de toutes les particules. Pour faire ça, toujours dans la petite fenêtre à droite, tu as une liste déroulante Add modification. Dans la catégorie Modification tu choisies Compute properties,
+et dans output properties, tu choisies Transparency et tu modifies dans la case expression la valeiur à 0.5
+
+
+
+
+
+
+
+
