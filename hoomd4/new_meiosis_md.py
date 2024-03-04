@@ -72,18 +72,24 @@ if __name__ == "__main__":
     n_bonds = len(df_bonds)
     n_angles = len(df_angles)
     polymers_global_ids, polymers_local_ids, polymers_coords = [], [], []
+    polymers_bonds, polymers_bonds_types = [], []
+    polymers_angles, polymers_angles_types = [], []
     polymers_atoms_types = [[1] + [0] * (s-2) + [1] for s in polymers_sizes]
 
     for x in range(1, n_polymers+1):
-        global_ids = df_atoms[df_atoms['molecule'] == x]['id'].astype(int).to_list()
-        local_ids = df_atoms[df_atoms['molecule'] == x]['type'].astype(int).to_list()
+        global_ids = df_atoms[df_atoms['molecule'] == x]['id'].astype(int).tolist()
+        local_ids = df_atoms[df_atoms['molecule'] == x]['type'].astype(int).tolist()
         coords = list(df_atoms[df_atoms['molecule'] == x][['x', 'y', 'z']].values)
+        bonds = df_bonds[df_bonds['molecule'] == x][['atom1', 'atom2']].values.astype(int).tolist()
+        bonds_types = df_bonds[df_bonds['molecule'] == x]['type'].values.astype(int).tolist()
+        angles = df_angles[df_angles['molecule'] == x][['atom1', 'atom2', 'atom3']].values.astype(int).tolist()
+        angles_types = df_angles[df_angles['molecule'] == x]['type'].values.astype(int).tolist()
         polymers_global_ids.append(global_ids)
         polymers_local_ids.append(local_ids)
         polymers_coords.append(coords)
-
-    polymers_bonds, polymers_bonds_types = [], []
-    polymers_angles, polymers_angles_types = [], []
+        polymers_bonds.append(bonds)
+        polymers_bonds_types.append(bonds_types)
+        polymers_angles.append(angles)
 
     pass
 

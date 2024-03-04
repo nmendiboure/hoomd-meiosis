@@ -51,9 +51,9 @@ class LSimu:
                 X, Y, Z = pos
                 atoms.append([ids, molecule.uid, l_ids, X, Y, Z])
             for bid, type_bond, n1, n2 in molecule.bonds:
-                bonds.append([bid, type_bond, n1, n2])
+                bonds.append([bid, molecule.uid, type_bond, n1, n2])
             for aid, type_bond, n1, n2, n3 in molecule.angles:
-                angles.append([aid, type_bond, n1, n2, n3])
+                angles.append([aid, molecule.uid, type_bond, n1, n2, n3])
 
             start_id += len(atoms)
             start_bond += len(bonds)
@@ -62,9 +62,9 @@ class LSimu:
             df_atoms = pd.concat([df_atoms, pd.DataFrame(
                 np.asarray(atoms), columns=["id", "molecule", "type", "x", "y", "z"])])
             df_bonds = pd.concat([df_bonds, pd.DataFrame(
-                np.asarray(bonds), columns=["id", "type", "atom1", "atom2"])])
+                np.asarray(bonds), columns=["id", "molecule", "type", "atom1", "atom2"])])
             df_angles = pd.concat([df_angles, pd.DataFrame(
-                np.asarray(angles), columns=["id", "type", "atom1", "atom2", "atom3"])])
+                np.asarray(angles), columns=["id", "molecule", "type", "atom1", "atom2", "atom3"])])
 
         os.makedirs(dirname, exist_ok=True)
         df_atoms.to_csv(os.path.join(dirname, "atoms.tsv"), index=False, sep="\t")
