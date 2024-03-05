@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 
-from polymer import Chromosome
 import pandas as pd
 
 
