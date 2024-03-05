@@ -63,33 +63,35 @@ if __name__ == "__main__":
     df_bonds = pd.read_csv('./data/bonds.tsv', sep="\t")
     df_angles = pd.read_csv('./data/angles.tsv', sep="\t")
 
-    atoms_types = {0: 'dna', 1: 'tel', 2: 'dsb'}
     n_atoms = len(df_atoms)
-    n_polymers = len(df_atoms['molecule'].unique())
-    polymers_sizes = [len(df_atoms[df_atoms['molecule'] == x]) for x in range(1, n_polymers + 1)]
-    n_tel = n_polymers * 2
-    n_dna = n_atoms - n_tel
     n_bonds = len(df_bonds)
     n_angles = len(df_angles)
-    polymers_global_ids, polymers_local_ids, polymers_coords = [], [], []
-    polymers_bonds, polymers_bonds_types = [], []
-    polymers_angles, polymers_angles_types = [], []
-    polymers_atoms_types = [[1] + [0] * (s-2) + [1] for s in polymers_sizes]
+    n_mol = len(df_atoms['molecule'].unique())
+    n_tel = n_mol * 2
+    n_dna = n_atoms - n_tel
+    mol_sizes = [len(df_atoms[df_atoms['molecule'] == x]) for x in range(1, n_mol + 1)]
 
-    for x in range(1, n_polymers+1):
+    atoms_types = {0: 'dna', 1: 'tel', 2: 'dsb'}
+
+    mol_global_ids, mol_local_ids, mol_coords = [], [], []
+    mol_bonds, mol_bonds_types = [], []
+    # mol_angles, mol_angles_types = [], []
+    mol_atoms_types = [[1] + [0] * (s-2) + [1] for s in mol_sizes]
+
+    for x in range(1, n_mol+1):
         global_ids = df_atoms[df_atoms['molecule'] == x]['id'].astype(int).tolist()
         local_ids = df_atoms[df_atoms['molecule'] == x]['type'].astype(int).tolist()
         coords = list(df_atoms[df_atoms['molecule'] == x][['x', 'y', 'z']].values)
-        bonds = df_bonds[df_bonds['molecule'] == x][['atom1', 'atom2']].values.astype(int).tolist()
-        bonds_types = df_bonds[df_bonds['molecule'] == x]['type'].values.astype(int).tolist()
-        angles = df_angles[df_angles['molecule'] == x][['atom1', 'atom2', 'atom3']].values.astype(int).tolist()
-        angles_types = df_angles[df_angles['molecule'] == x]['type'].values.astype(int).tolist()
-        polymers_global_ids.append(global_ids)
-        polymers_local_ids.append(local_ids)
-        polymers_coords.append(coords)
-        polymers_bonds.append(bonds)
-        polymers_bonds_types.append(bonds_types)
-        polymers_angles.append(angles)
+        # bonds = df_bonds[df_bonds['molecule'] == x][['atom1', 'atom2']].values.astype(int).tolist()
+        # bonds_types = df_bonds[df_bonds['molecule'] == x]['type'].values.astype(int).tolist()
+        # angles = df_angles[df_angles['molecule'] == x][['atom1', 'atom2', 'atom3']].values.astype(int).tolist()
+        # angles_types = df_angles[df_angles['molecule'] == x]['type'].values.astype(int).tolist()
+        mol_global_ids.append(global_ids)
+        mol_local_ids.append(local_ids)
+        mol_coords.append(coords)
+        # mol_bonds.append(bonds)
+        # mol_bonds_types.append(bonds_types)
+        # mol_angles.append(angles)
 
     pass
 
