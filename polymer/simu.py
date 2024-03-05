@@ -6,7 +6,7 @@ from polymer import Chromosome
 import pandas as pd
 
 
-class LSimu:
+class Simu:
     def __init__(self, cmd="lmp -in"):
         self.molecules = []
 

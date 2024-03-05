@@ -4,7 +4,7 @@ import numpy as np
 from os.path import join
 
 from polymer import Chromosome
-from lsimu import LSimu
+from simu import Simu
 from constraint import Sphere, Point
 from halley.constraint import Spherical
 from halley.vectors import V
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     poly_sizes = [24, 24, 36, 36, 48, 48]
 
     nucleus = Sphere(position=[0, 0, 0], radius=radius)
-    simu = LSimu()
+    simu = Simu()
 
     for x in range(n_poly):
         uid = x+1
