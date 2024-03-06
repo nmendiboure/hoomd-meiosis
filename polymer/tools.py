@@ -1,5 +1,7 @@
 import numpy as np
 import bisect
+import random
+from math import sin, cos
 
 
 def init_proba_log(P, dx, lrange=[0, 3.14]):
@@ -39,3 +41,16 @@ def generate_point_proba(x, index):
     except:
         print("Constrain to high")
         raise
+
+
+def generateV():
+    theta = random.uniform(0, 2 * 3.14)
+    phi = random.uniform(0, 3.14)
+    return np.array([cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi)])
+
+
+def norm(v):
+    n = 0
+    for el in v:
+        n += el * el
+    return np.sqrt(n)

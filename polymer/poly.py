@@ -1,16 +1,13 @@
-import os
 import random
 import numpy as np
-from os.path import join
 from typing import List
-
 import pandas as pd
+
 
 from constraint import Sphere, Point
 from halley.constraint import Spherical
 from halley.vectors import V
-from utils import norm, generateV
-from proba import init_proba_log, generate_point_proba
+from tools import init_proba_log, generate_point_proba, generateV, norm
 
 
 np.random.seed(42)
@@ -154,10 +151,7 @@ def generate_next(
     return pos
 
 
-if __name__ == "__main__":
-    radius = 12
-    n_poly = 6
-    poly_sizes = [24, 24, 36, 36, 48, 48]
+def make_polymer(radius: int | float, n_poly: int, poly_sizes: List[int]):
 
     nucleus = Sphere(position=[0, 0, 0], radius=radius)
 
@@ -189,6 +183,14 @@ if __name__ == "__main__":
     for i, coords in enumerate(poly_coords):
         for j, coord in enumerate(coords):
             df_atoms = pd.concat([df_atoms, pd.DataFrame(
-                [[i * poly_sizes[i] + j, i, 0, coord[0], coord[1], coord[2]]],
+                [[i * poly_sizes[i] + j, i, j, coord[0], coord[1], coord[2]]],
                 columns=["id", "molecule", "type", "x", "y", "z"]
             )])
+
+    df_atoms = df_atoms.reset_index(drop=True)
+
+    return df_atoms
+
+
+if __name__ == "__main__":
+    res = make_polymer(radius=12, n_poly=6, poly_sizes=[24, 24, 36, 36, 48, 48])

@@ -1,5 +1,5 @@
 import numpy as np
-from utils import norm, generateV
+from tools import norm, generateV
 
 
 class Constrain:

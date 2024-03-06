@@ -11,8 +11,9 @@ import random as rdn
 from datetime import datetime
 
 from utils import is_debug
+from polymer.poly import make_polymer
 
-seed = 1999
+seed = 42
 np.random.seed(seed)
 random.seed(seed)
 
@@ -59,13 +60,13 @@ if __name__ == "__main__":
     """
 
     # import the particle's attributes
-    df_atoms = pd.read_csv('./data/atoms.tsv', sep="\t")
-    df_bonds = pd.read_csv('./data/bonds.tsv', sep="\t")
-    df_angles = pd.read_csv('./data/angles.tsv', sep="\t")
-
+    n_poly = 6
+    poly_sizes = [24, 24, 36, 36, 48, 48]
+    df_atoms = make_polymer(radius=radius, n_poly=n_poly, poly_sizes=poly_sizes)
     n_atoms = len(df_atoms)
-    n_bonds = len(df_bonds)
-    n_angles = len(df_angles)
+    n_bonds = n_atoms - n_poly
+    n_angles = n_atoms - n_poly * 2
+
     n_mol = len(df_atoms['molecule'].unique())
     n_tel = n_mol * 2
     n_dna = n_atoms - n_tel
