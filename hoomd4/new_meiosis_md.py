@@ -1,14 +1,9 @@
 import random
-import math
 import hoomd
 import gsd.hoomd
-import sys
 import os
 import shutil
 import numpy as np
-import pandas as pd
-import random as rdn
-from datetime import datetime
 
 from utils import is_debug
 from polymer.poly import make_polymer
@@ -28,6 +23,7 @@ if __name__ == "__main__":
     timepoints = 500    # total number of timestep
     dt = 0.005    # timestep
     radius = 12.0
+    L = 3*radius + 3
     calibration_time = 10
     min_distance_binding = 10.2  # required dist for homologous binding
     persistence_length = 10
@@ -58,41 +54,72 @@ if __name__ == "__main__":
     #####    Atoms Attributes Setup    #####
     ############################################
     """
-
-    # import the particle's attributes
     n_poly = 6
     poly_sizes = [24, 24, 36, 36, 48, 48]
-    df_atoms = make_polymer(radius=radius, n_poly=n_poly, poly_sizes=poly_sizes)
-    n_atoms = len(df_atoms)
-    n_bonds = n_atoms - n_poly
-    n_angles = n_atoms - n_poly * 2
 
-    n_mol = len(df_atoms['molecule'].unique())
-    n_tel = n_mol * 2
-    n_dna = n_atoms - n_tel
-    mol_sizes = [len(df_atoms[df_atoms['molecule'] == x]) for x in range(1, n_mol + 1)]
+    # Direct approach for particle IDs and types
+    df_particles = make_polymer(radius=radius, n_poly=n_poly, poly_sizes=poly_sizes)
+    n_particles = len(df_particles)
+    particles_ids = list(range(n_particles))
+    particles_types = ['dna', 'tel', 'dsb']
+    particles_typeid = [1 if i == 0 or i == s - 1 else 0 for s in poly_sizes for i in range(s)]
+    particles_positions = df_particles[['x', 'y', 'z']].values.tolist()
+    homologous_pairs = [[df_particles.iloc[i]['id'], df_particles.iloc[i + s]['id']] for s, size in
+                        enumerate(poly_sizes) for i in range(size)]
 
-    atoms_types = {0: 'dna', 1: 'tel', 2: 'dsb'}
+    n_bonds = n_particles - n_poly
+    bonds_group = np.zeros((n_bonds, 2), dtype=int)
+    bonds_types = ["dna-telo", "dna-dna", "dna-dsb"]
+    bonds_typeid = np.array(
+        [bonds_types.index("dna-telo") if i == 0 or i == size - 2 else bonds_types.index("dna-dna")
+         for size in poly_sizes for i in range(size - 1)])
 
-    mol_global_ids, mol_local_ids, mol_coords = [], [], []
-    mol_bonds, mol_bonds_types = [], []
-    # mol_angles, mol_angles_types = [], []
-    mol_atoms_types = [[1] + [0] * (s-2) + [1] for s in mol_sizes]
+    n_angles = n_particles - n_poly * 2
+    angles_group = np.zeros((n_angles, 3), dtype=int)
+    angles_types = ["dna-dna-dna"]
+    angles_typeid = np.array([angles_types.index("dna-dna-dna") for size in poly_sizes for i in range(size - 2)])
 
-    for x in range(1, n_mol+1):
-        global_ids = df_atoms[df_atoms['molecule'] == x]['id'].astype(int).tolist()
-        local_ids = df_atoms[df_atoms['molecule'] == x]['type'].astype(int).tolist()
-        coords = list(df_atoms[df_atoms['molecule'] == x][['x', 'y', 'z']].values)
-        # bonds = df_bonds[df_bonds['molecule'] == x][['atom1', 'atom2']].values.astype(int).tolist()
-        # bonds_types = df_bonds[df_bonds['molecule'] == x]['type'].values.astype(int).tolist()
-        # angles = df_angles[df_angles['molecule'] == x][['atom1', 'atom2', 'atom3']].values.astype(int).tolist()
-        # angles_types = df_angles[df_angles['molecule'] == x]['type'].values.astype(int).tolist()
-        mol_global_ids.append(global_ids)
-        mol_local_ids.append(local_ids)
-        mol_coords.append(coords)
-        # mol_bonds.append(bonds)
-        # mol_bonds_types.append(bonds_types)
-        # mol_angles.append(angles)
+    # Optimizing loops for bonds and angles
+    start_indices = list(np.cumsum([0] + poly_sizes[:-1]))
+    b_counter = 0
+    a_counter = 0
+    for x, start in enumerate(start_indices):
+        x_len = poly_sizes[x]
+        for b in range(x_len - 1):
+            bonds_group[b_counter] = [start + b, start + b + 1]
+            b_counter += 1
+        for a in range(x_len - 2):
+            angles_group[a_counter] = [start + a, start + a + 1, start + a + 2]
+            a_counter += 1
 
-    pass
+    """
+    ############################################
+    #####         Hoomd Init Frame         #####
+    ############################################
+    """
+
+    frame = gsd.hoomd.Frame()
+    frame.particles.N = n_particles
+    frame.particles.types = particles_types
+    frame.particles.typeid = particles_typeid
+    frame.particles.position = particles_positions
+
+    frame.bonds.N = n_bonds
+    frame.bonds.group = bonds_group
+    frame.bonds.typeid = bonds_typeid
+    frame.bonds.types = bonds_types
+
+    frame.angles.N = n_angles
+    frame.angles.group = angles_group
+    frame.angles.typeid = angles_typeid
+    frame.angles.types = angles_types
+
+    frame.configuration.box = [L, L, L, 0, 0, 0]
+    frame.configuration.dimensions = 3
+
+    snapshot_save_path = "./data/lattice.gsd"
+    if os.path.exists(snapshot_save_path):
+        os.remove(snapshot_save_path)
+    with gsd.hoomd.open(name=snapshot_save_path, mode='x') as f:
+        f.append(frame)
 
