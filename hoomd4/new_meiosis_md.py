@@ -20,7 +20,7 @@ if __name__ == "__main__":
     #####       Initial Parameters         #####
     ############################################
     """
-    nb_breaks = 10  # nb of DNA breaks
+    nb_breaks = 8  # nb of DNA breaks
     timepoints = 500    # total number of timestep
     dt = 0.005    # timestep
     radius = 12.0
@@ -57,16 +57,23 @@ if __name__ == "__main__":
     """
     n_poly = 6
     poly_sizes = [24, 24, 36, 36, 48, 48]
+    poly_sizes_single = [24, 36, 48]
 
     # Direct approach for particle IDs and types
     df_particles = make_polymer(radius=radius, n_poly=n_poly, poly_sizes=poly_sizes)
     n_particles = len(df_particles)
     particles_ids = list(range(n_particles))
     particles_types = ['dna', 'tel', 'dsb']
-    particles_typeid = [1 if i == 0 or i == s - 1 else 0 for s in poly_sizes for i in range(s)]
+    particles_typeid = np.array([1 if i == 0 or i == s - 1 else 0 for s in poly_sizes for i in range(s)])
     particles_positions = df_particles[['x', 'y', 'z']].values.tolist()
-    homologous_pairs = [[df_particles.iloc[i]['id'], df_particles.iloc[i + s]['id']] for s, size in
-                        enumerate(poly_sizes) for i in range(size)]
+
+    homologous_pairs = []
+    counter = 0
+    for s, size in enumerate(poly_sizes_single):
+        for ll in range(size):
+            homologous_pairs.append([counter + ll, counter + ll + size])
+        counter += 2 * size
+    homologous_pairs = np.array(homologous_pairs)
 
     n_bonds = n_particles - n_poly
     bonds_group = np.zeros((n_bonds, 2), dtype=int)
@@ -93,6 +100,10 @@ if __name__ == "__main__":
             angles_group[a_counter] = [start + a, start + a + 1, start + a + 2]
             a_counter += 1
 
+    breaks_ids = np.random.choice(particles_ids, nb_breaks, replace=False)
+    particles_typeid[breaks_ids] = particles_types.index('dsb')
+    homologous_breaks_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, breaks_ids))[0]]
+
     """
     ############################################
     #####         Hoomd Init Frame         #####
@@ -118,10 +129,13 @@ if __name__ == "__main__":
     frame.configuration.box = [L, L, L, 0, 0, 0]
     frame.configuration.dimensions = 3
 
-    snapshot_save_path = "./data/lattice.gsd"
-    if os.path.exists(snapshot_save_path):
-        os.remove(snapshot_save_path)
-    with gsd.hoomd.open(name=snapshot_save_path, mode='x') as f:
+    snapshots_dir = os.path.join(cwd, 'snapshots')
+    if not os.path.exists(snapshots_dir):
+        os.makedirs(snapshots_dir)
+    lattice_init_path = os.path.join(snapshots_dir, "lattice_init.gsd")
+    if os.path.exists(lattice_init_path):
+        os.remove(lattice_init_path)
+    with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
 
     """
@@ -138,7 +152,7 @@ if __name__ == "__main__":
         raise Exception("mode must be 'cpu' or 'gpu'")
 
     sim = hoomd.Simulation(device=device, seed=seed)
-    sim.create_state_from_gsd(snapshot_save_path)
+    sim.create_state_from_gsd(lattice_init_path)
     integrator = hoomd.md.Integrator(dt=dt)
 
     """
@@ -151,6 +165,7 @@ if __name__ == "__main__":
     # Define bond strength and type
     harmonic_bonds = hoomd.md.bond.Harmonic()
     harmonic_bonds.params['dna-dna'] = dict(k=800, r0=1)
+    harmonic_bonds.params['dna-dsb'] = dict(k=800, r0=1)
     harmonic_bonds.params['dna-telo'] = dict(k=800, r0=1)
     harmonic_bonds.params['dsb-dsb'] = dict(k=80, r0=1)
     integrator.forces.append(harmonic_bonds)
@@ -159,9 +174,11 @@ if __name__ == "__main__":
     # k-parameter acting on the persistence length
     harmonic_angles = hoomd.md.angle.Harmonic()
     harmonic_angles.params['dna-dna-dna'] = dict(k=persistence_length, t0=pi)
+    harmonic_angles.params['dna-dsb-dna'] = dict(k=persistence_length, t0=pi)
     integrator.forces.append(harmonic_angles)
 
     #   Define pairwise interactions
+    group_all = hoomd.filter.All()
     telo_group = hoomd.filter.Type(["tel"])
     group_not_telo = hoomd.filter.SetDifference(f=hoomd.filter.All(), g=telo_group)
     breaks_group = hoomd.filter.Type(["dsb"])
@@ -186,9 +203,31 @@ if __name__ == "__main__":
     sphere = hoomd.wall.Sphere(radius=radius, origin=(0., 0., 0.), inside=True)
     walls = [sphere]
     shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls)
+
     # repulsive interaction because cut at the minimum value
     shifted_lj_wall.params[particles_types] = dict(epsilon=1, sigma=2, r_cut=2**(1 / 6))
     shifted_lj_wall.params['tel'] = dict(epsilon=2, sigma=1, r_extrap=0, r_cut=3)
+
+    #   Record trajectories
+    save_path = os.path.join(snapshots_dir, 'poly_d.gsd')
+    if os.path.exists(save_path):
+        os.remove(save_path)
+    hoomd.write.GSD.write(state=sim.state, mode='xb', filter=hoomd.filter.All(), filename=save_path)
+
     integrator.forces.append(shifted_lj)
     integrator.forces.append(shifted_lj_wall)
+
+    langevin = hoomd.md.methods.Langevin(filter=group_all, kT=1)
+    langevin.gamma['tel'] = 0.2
+    integrator.methods.append(langevin)
+
+    # Assign the integrator to the simulation
+    sim.operations.integrator = integrator
+
+    #   Calibration
+    sim.run(1000)
+    calibration_save_path = os.path.join(snapshots_dir, 'calibration.gsd')
+    if os.path.exists(calibration_save_path):
+        os.remove(calibration_save_path)
+    hoomd.write.GSD.write(state=sim.state, filename=calibration_save_path, mode='x')
 
