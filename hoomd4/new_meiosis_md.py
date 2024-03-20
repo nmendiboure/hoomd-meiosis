@@ -1,17 +1,90 @@
 import random
 import hoomd
 import gsd.hoomd
+from hoomd.wall import Sphere as WallSphere
+from hoomd.md.manifold import Sphere as ManifoldSphere
+from hoomd.md.methods.rattle import NVE
 import os
 import shutil
 import numpy as np
+import plotly.graph_objects as go
+
 
 from utils import is_debug
-from polymer.poly import make_polymer
 
 pi = np.pi
 seed = 42
 np.random.seed(seed)
 random.seed(seed)
+
+
+def random_point_on_sphere(radius):
+    theta = np.random.uniform(0, 2 * np.pi)
+    phi = np.arccos(1 - 2 * np.random.uniform())
+    x = radius * np.sin(phi) * np.cos(theta)
+    y = radius * np.sin(phi) * np.sin(theta)
+    z = radius * np.cos(phi)
+    return np.array([x, y, z])
+
+
+def interpolate_points(start, end, num_points):
+    vect = end - start
+    unit_vect = vect / np.linalg.norm(vect)
+    distances = np.linspace(0, np.linalg.norm(vect), num_points)
+    return np.array([start + distance * unit_vect for distance in distances])
+
+
+def place_polymer_in_sphere(radius, num_particles):
+    telo1_pos = random_point_on_sphere(radius)
+    telo2_pos = random_point_on_sphere(radius)
+    while np.linalg.norm(telo1_pos - telo2_pos) < radius:
+        telo2_pos = random_point_on_sphere(radius)
+
+    polymer_positions = interpolate_points(telo1_pos, telo2_pos, num_particles - 2)
+    polymer_positions = np.vstack([telo1_pos, polymer_positions, telo2_pos])
+    return polymer_positions
+
+
+def plot_polymer(polymer_positions, sizes):
+    fig.add_trace(go.Mesh3d(
+        x=x.flatten(),
+        y=y.flatten(),
+        z=z.flatten(),
+        color='lightpink',
+        opacity=0.1,
+        alphahull=0
+    ))
+
+    start = 0
+    colors = ['red', 'green', 'blue']
+    c = -1
+    for s, size in enumerate(sizes):
+        positions = particles_positions[start:start+size]
+        start += size
+        if s % 2 == 0:
+            c += 1
+        fig.add_trace(go.Scatter3d(
+            x=positions[:, 0],
+            y=positions[:, 1],
+            z=positions[:, 2],
+            mode='lines+markers',
+            marker=dict(size=4, color=colors[c]),
+            line=dict(color=colors[c], width=2)
+        ))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
+            yaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
+            zaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
+            aspectmode='cube'
+        ),
+        width=1920,
+        height=1080,
+        margin=dict(r=20, l=10, b=10, t=10)
+    )
+
+    fig.show()
 
 
 if __name__ == "__main__":
@@ -22,9 +95,9 @@ if __name__ == "__main__":
     """
     nb_breaks = 8  # nb of DNA breaks
     timepoints = 500    # total number of timestep
-    dt = 0.005    # timestep
+    dt = 0.0001    # timestep
     radius = 12.0
-    L = 3*radius + 3
+    L = 3*radius
     calibration_time = 10
     min_distance_binding = 10.2  # required dist for homologous binding
     persistence_length = 10
@@ -59,13 +132,24 @@ if __name__ == "__main__":
     poly_sizes = [24, 24, 36, 36, 48, 48]
     poly_sizes_single = [24, 36, 48]
 
-    # Direct approach for particle IDs and types
-    df_particles = make_polymer(radius=radius, n_poly=n_poly, poly_sizes=poly_sizes)
-    n_particles = len(df_particles)
+    fig = go.Figure()
+    u, v = np.mgrid[0:2 * np.pi:100j, 0:np.pi:50j]
+    x = radius * np.cos(u) * np.sin(v)
+    y = radius * np.sin(u) * np.sin(v)
+    z = radius * np.cos(v)
+
+    particles_positions = []
+    for size in poly_sizes:
+        positions = place_polymer_in_sphere(radius - 0.5, size)
+        particles_positions.extend(positions)
+    particles_positions = np.array(particles_positions)
+
+    plot_polymer(particles_positions, poly_sizes)
+
+    n_particles = len(particles_positions)
     particles_ids = list(range(n_particles))
     particles_types = ['dna', 'tel', 'dsb']
     particles_typeid = np.array([1 if i == 0 or i == s - 1 else 0 for s in poly_sizes for i in range(s)])
-    particles_positions = df_particles[['x', 'y', 'z']].values.tolist()
 
     homologous_pairs = []
     counter = 0
@@ -151,8 +235,8 @@ if __name__ == "__main__":
     else:
         raise Exception("mode must be 'cpu' or 'gpu'")
 
-    sim = hoomd.Simulation(device=device, seed=seed)
-    sim.create_state_from_gsd(lattice_init_path)
+    simulation = hoomd.Simulation(device=device, seed=seed)
+    simulation.create_state_from_gsd(lattice_init_path)
     integrator = hoomd.md.Integrator(dt=dt)
 
     """
@@ -179,9 +263,8 @@ if __name__ == "__main__":
 
     #   Define pairwise interactions
     group_all = hoomd.filter.All()
-    telo_group = hoomd.filter.Type(["tel"])
-    group_not_telo = hoomd.filter.SetDifference(f=hoomd.filter.All(), g=telo_group)
-    breaks_group = hoomd.filter.Type(["dsb"])
+    group_tel = hoomd.filter.Type(["tel"])
+    group_not_tel = hoomd.filter.SetDifference(f=group_all, g=group_tel)
 
     cell = hoomd.md.nlist.Cell(buffer=0.4)
     #   Computes the radially shifted Lennard-Jones pair force on every particle in the simulation state
@@ -199,35 +282,32 @@ if __name__ == "__main__":
     shifted_lj.r_cut[('tel', 'tel')] = 2**(1.0 / 6.0)
     shifted_lj.r_cut[('tel', 'dsb')] = 2**(1.0 / 6.0)
     shifted_lj.r_cut[('dsb', 'dsb')] = 2**(1.0 / 6.0)
-
-    sphere = hoomd.wall.Sphere(radius=radius, origin=(0., 0., 0.), inside=True)
-    walls = [sphere]
-    shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls)
-
-    # repulsive interaction because cut at the minimum value
-    shifted_lj_wall.params[particles_types] = dict(epsilon=1, sigma=2, r_cut=2**(1 / 6))
-    shifted_lj_wall.params['tel'] = dict(epsilon=2, sigma=1, r_extrap=0, r_cut=3)
-
-    #   Record trajectories
-    save_path = os.path.join(snapshots_dir, 'poly_d.gsd')
-    if os.path.exists(save_path):
-        os.remove(save_path)
-    hoomd.write.GSD.write(state=sim.state, mode='xb', filter=hoomd.filter.All(), filename=save_path)
-
     integrator.forces.append(shifted_lj)
+
+    sphere_wall = WallSphere(radius=radius, origin=(0, 0, 0))
+    walls = [sphere_wall]
+    shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls)
+    shifted_lj_wall.params[particles_types] = {"epsilon": 1.0, "sigma": 2.0, "r_cut": 2**(1 / 6)}
     integrator.forces.append(shifted_lj_wall)
 
-    langevin = hoomd.md.methods.Langevin(filter=group_all, kT=1)
-    langevin.gamma['tel'] = 0.2
+    manifold = ManifoldSphere(r=radius, P=(0, 0, 0))
+    nve_rattle_telo = NVE(filter=hoomd.filter.Type(["tel"]), manifold_constraint=manifold, tolerance=0.01)
+    integrator.methods.append(nve_rattle_telo)
+
+    langevin = hoomd.md.methods.Langevin(filter=group_not_tel, kT=1)
+    langevin.gamma['dna'] = 0.2
+    langevin.gamma['dsb'] = 0.2
     integrator.methods.append(langevin)
 
-    # Assign the integrator to the simulation
-    sim.operations.integrator = integrator
+    simulation.operations.integrator = integrator
 
     #   Calibration
-    sim.run(1000)
-    calibration_save_path = os.path.join(snapshots_dir, 'calibration.gsd')
-    if os.path.exists(calibration_save_path):
-        os.remove(calibration_save_path)
-    hoomd.write.GSD.write(state=sim.state, filename=calibration_save_path, mode='x')
+    simulation.run(1000)
 
+    pass
+
+    # calibration_save_path = os.path.join(snapshots_dir, 'calibration.gsd')
+    # if os.path.exists(calibration_save_path):
+    #     os.remove(calibration_save_path)
+    # hoomd.write.GSD.write(state=simulation.state, filename=calibration_save_path, mode='x')
+    #
