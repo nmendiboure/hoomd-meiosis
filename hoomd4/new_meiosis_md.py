@@ -46,6 +46,13 @@ def place_polymer_in_sphere(radius, num_particles):
 
 
 def plot_polymer(polymer_positions, sizes):
+
+    fig = go.Figure()
+    u, v = np.mgrid[0:2 * np.pi:100j, 0:np.pi:50j]
+    x = radius * np.cos(u) * np.sin(v)
+    y = radius * np.sin(u) * np.sin(v)
+    z = radius * np.cos(v)
+
     fig.add_trace(go.Mesh3d(
         x=x.flatten(),
         y=y.flatten(),
@@ -59,7 +66,7 @@ def plot_polymer(polymer_positions, sizes):
     colors = ['red', 'green', 'blue']
     c = -1
     for s, size in enumerate(sizes):
-        positions = particles_positions[start:start+size]
+        positions = polymer_positions[start:start+size]
         start += size
         if s % 2 == 0:
             c += 1
@@ -131,12 +138,6 @@ if __name__ == "__main__":
     n_poly = 6
     poly_sizes = [24, 24, 36, 36, 48, 48]
     poly_sizes_single = [24, 36, 48]
-
-    fig = go.Figure()
-    u, v = np.mgrid[0:2 * np.pi:100j, 0:np.pi:50j]
-    x = radius * np.cos(u) * np.sin(v)
-    y = radius * np.sin(u) * np.sin(v)
-    z = radius * np.cos(v)
 
     particles_positions = []
     for size in poly_sizes:
