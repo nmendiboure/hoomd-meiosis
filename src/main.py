@@ -122,7 +122,9 @@ if __name__ == "__main__":
 
     #   Create folders
     cwd = os.getcwd()
-    data = os.path.join(cwd, 'data')
+    data = os.path.join(os.path.dirname(cwd), 'data')
+    snapshots_dir = os.path.join(os.path.dirname(cwd), 'snapshots')
+
     # simu_id = datetime.now().strftime("%Y:%m:%d-%H%M%S")
     simu_id = "test"
     simu_dir = os.path.join(data, simu_id)
@@ -145,7 +147,7 @@ if __name__ == "__main__":
         particles_positions.extend(positions)
     particles_positions = np.array(particles_positions)
 
-    plot_polymer(particles_positions, poly_sizes)
+    # plot_polymer(particles_positions, poly_sizes)
 
     n_particles = len(particles_positions)
     particles_ids = list(range(n_particles))
@@ -214,7 +216,6 @@ if __name__ == "__main__":
     frame.configuration.box = [L, L, L, 0, 0, 0]
     frame.configuration.dimensions = 3
 
-    snapshots_dir = os.path.join(cwd, 'snapshots')
     if not os.path.exists(snapshots_dir):
         os.makedirs(snapshots_dir)
     lattice_init_path = os.path.join(snapshots_dir, "lattice_init.gsd")
