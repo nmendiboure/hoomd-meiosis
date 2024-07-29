@@ -1,21 +1,26 @@
 import random
 import hoomd
 import gsd.hoomd
-from hoomd.wall import Sphere as WallSphere
-from hoomd.md.manifold import Sphere as ManifoldSphere
-from hoomd.md.methods.rattle import NVE
 import os
 import shutil
 import numpy as np
 import plotly.graph_objects as go
 
-
 from utils import is_debug
 
-pi = np.pi
-seed = 42
-np.random.seed(seed)
-random.seed(seed)
+# The system state (aka a "snapshot") defined above is then used to initialize a HOOMD-blue simulation.
+try:
+    device = hoomd.device.GPU()
+    print(device.get_available_devices(), device.is_available())
+except:
+    device = hoomd.device.CPU()
+    print('No GPU found, using CPU')
+
+PI = np.pi
+SEED = 42
+NOTICE_LEVEL = 2
+np.random.seed(SEED)
+random.seed(SEED)
 
 
 def random_point_on_sphere(radius):
@@ -40,12 +45,11 @@ def place_polymer_in_sphere(radius, num_particles):
     while np.linalg.norm(telo1_pos - telo2_pos) < radius:
         telo2_pos = random_point_on_sphere(radius)
 
-    polymer_positions = interpolate_points(telo1_pos, telo2_pos, num_particles - 2)
-    polymer_positions = np.vstack([telo1_pos, polymer_positions, telo2_pos])
+    polymer_positions = interpolate_points(telo1_pos, telo2_pos, num_particles)
     return polymer_positions
 
 
-def plot_polymer(polymer_positions, sizes):
+def plot_polymer(polymer_positions, sizes, radius):
 
     fig = go.Figure()
     u, v = np.mgrid[0:2 * np.pi:100j, 0:np.pi:50j]
@@ -95,91 +99,92 @@ def plot_polymer(polymer_positions, sizes):
 
 
 if __name__ == "__main__":
+
     """
     ############################################
     #####       Initial Parameters         #####
     ############################################
     """
-    nb_breaks = 8  # nb of DNA breaks
-    timepoints = 500    # total number of timestep
-    dt = 0.0001    # timestep
-    radius = 12.0
-    L = 3*radius
-    calibration_time = 10
-    min_distance_binding = 10.2  # required dist for homologous binding
-    persistence_length = 10
-    period = 1000   # periodic trigger
-    mode = 'cpu'    # run on cpu or gpu
-    rd_pos = False  # place the polymer randomly or not
-    debug = False   # debug mode (useful on IDE)
-    notice_level = 2
+    N_POLY = 4
+    L_POLY = [24, 24, 36, 36]
+    N_BREAKS = 8
+    N_PARTICLES = sum(L_POLY)
+    RADIUS = 16.0
+    L = 3 * RADIUS
+    DT = 0.001
+    CALIBRATION_TIME = 10
+    MIN_DISTANCE_BINDING = 10.2
+    PERSISTENCE_LENGTH = 10
+    PERIOD = 1000
 
     if is_debug():
         #   if the debug mode is detected,
         #   increase the notice level
         debug = True
-        notice_level = 10
+        NOTICE_LEVEL = 10
 
     #   Create folders
     cwd = os.getcwd()
     data = os.path.join(os.path.dirname(cwd), 'data')
-    snapshots_dir = os.path.join(os.path.dirname(cwd), 'snapshots')
+    snapshots_dir = os.path.join(data, 'snapshots')
+    lattice_init_path = os.path.join(snapshots_dir, "lattice_init.gsd")
 
-    # simu_id = datetime.now().strftime("%Y:%m:%d-%H%M%S")
-    simu_id = "test"
-    simu_dir = os.path.join(data, simu_id)
-    if os.path.exists(simu_dir):
-        shutil.rmtree(simu_dir)
-    os.makedirs(simu_dir)
+    if os.path.exists(snapshots_dir):
+        shutil.rmtree(snapshots_dir)
+    os.makedirs(snapshots_dir, exist_ok=True)
+    os.makedirs(snapshots_dir, exist_ok=True)
+    if os.path.exists(lattice_init_path):
+        os.remove(lattice_init_path)
 
     """
     ############################################
     #####    Atoms Attributes Setup    #####
     ############################################
     """
-    n_poly = 6
-    poly_sizes = [24, 24, 36, 36, 48, 48]
-    poly_sizes_single = [24, 36, 48]
 
     particles_positions = []
-    for size in poly_sizes:
-        positions = place_polymer_in_sphere(radius - 0.5, size)
+    for size in L_POLY:
+        positions = place_polymer_in_sphere(RADIUS, size)
         particles_positions.extend(positions)
     particles_positions = np.array(particles_positions)
 
-    # plot_polymer(particles_positions, poly_sizes)
+    # plot_polymer(particles_positions, L_POLY, RADIUS)
 
-    n_particles = len(particles_positions)
-    particles_ids = list(range(n_particles))
+    particles_ids = list(range(N_PARTICLES))
     particles_types = ['dna', 'tel', 'dsb']
-    particles_typeid = np.array([1 if i == 0 or i == s - 1 else 0 for s in poly_sizes for i in range(s)])
+    particles_typeid = []
+    for s in L_POLY:
+        for i in range(s):
+            particles_typeid.append(1 if i == 0 or i == s - 1 else 0)
+    particles_typeid = np.array(particles_typeid)
 
     homologous_pairs = []
     counter = 0
-    for s, size in enumerate(poly_sizes_single):
+    l_poly_single = [s for s, i in enumerate(L_POLY) if i % 2 == 0]
+    for s, size in enumerate(l_poly_single):
         for ll in range(size):
             homologous_pairs.append([counter + ll, counter + ll + size])
         counter += 2 * size
     homologous_pairs = np.array(homologous_pairs)
 
-    n_bonds = n_particles - n_poly
+    n_bonds = N_PARTICLES - N_POLY
     bonds_group = np.zeros((n_bonds, 2), dtype=int)
     bonds_types = ["dna-telo", "dna-dna", "dna-dsb", "dsb-dsb"]
     bonds_typeid = np.array(
         [bonds_types.index("dna-telo") if i == 0 or i == size - 2 else bonds_types.index("dna-dna")
-         for size in poly_sizes for i in range(size - 1)])
+         for size in L_POLY for i in range(size - 1)])
 
-    n_angles = n_particles - n_poly * 2
+    n_angles = N_PARTICLES - N_POLY * 2
     angles_group = np.zeros((n_angles, 3), dtype=int)
     angles_types = ["dna-dna-dna", "dna-dsb-dna"]
-    angles_typeid = np.array([angles_types.index("dna-dna-dna") for size in poly_sizes for i in range(size - 2)])
+    angles_typeid = np.array([angles_types.index("dna-dna-dna") for size in L_POLY for i in range(size - 2)])
 
     # Optimizing loops for bonds and angles
-    start_indices = list(np.cumsum([0] + poly_sizes[:-1]))
+    start_indices = list(np.cumsum([0] + L_POLY[:-1]))
     b_counter = 0
     a_counter = 0
     for x, start in enumerate(start_indices):
-        x_len = poly_sizes[x]
+        x_len = L_POLY[x]
         for b in range(x_len - 1):
             bonds_group[b_counter] = [start + b, start + b + 1]
             b_counter += 1
@@ -187,7 +192,7 @@ if __name__ == "__main__":
             angles_group[a_counter] = [start + a, start + a + 1, start + a + 2]
             a_counter += 1
 
-    breaks_ids = np.random.choice(particles_ids, nb_breaks, replace=False)
+    breaks_ids = np.random.choice(particles_ids, N_BREAKS, replace=False)
     particles_typeid[breaks_ids] = particles_types.index('dsb')
     homologous_breaks_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, breaks_ids))[0]]
 
@@ -198,7 +203,7 @@ if __name__ == "__main__":
     """
 
     frame = gsd.hoomd.Frame()
-    frame.particles.N = n_particles
+    frame.particles.N = N_PARTICLES
     frame.particles.types = particles_types
     frame.particles.typeid = particles_typeid
     frame.particles.position = particles_positions
@@ -216,11 +221,6 @@ if __name__ == "__main__":
     frame.configuration.box = [L, L, L, 0, 0, 0]
     frame.configuration.dimensions = 3
 
-    if not os.path.exists(snapshots_dir):
-        os.makedirs(snapshots_dir)
-    lattice_init_path = os.path.join(snapshots_dir, "lattice_init.gsd")
-    if os.path.exists(lattice_init_path):
-        os.remove(lattice_init_path)
     with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
 
@@ -230,16 +230,9 @@ if __name__ == "__main__":
     ############################################
     """
 
-    if mode == 'cpu':
-        device = hoomd.device.CPU(notice_level=notice_level)
-    elif mode == 'gpu':
-        device = hoomd.device.GPU(notice_level=notice_level)
-    else:
-        raise Exception("mode must be 'cpu' or 'gpu'")
-
-    simulation = hoomd.Simulation(device=device, seed=seed)
+    simulation = hoomd.Simulation(device=device, seed=SEED)
     simulation.create_state_from_gsd(lattice_init_path)
-    integrator = hoomd.md.Integrator(dt=dt)
+    integrator = hoomd.md.Integrator(dt=DT)
 
     """
     ############################################
@@ -259,8 +252,8 @@ if __name__ == "__main__":
     # Define angle energy and type
     # k-parameter acting on the persistence length
     harmonic_angles = hoomd.md.angle.Harmonic()
-    harmonic_angles.params['dna-dna-dna'] = dict(k=persistence_length, t0=pi)
-    harmonic_angles.params['dna-dsb-dna'] = dict(k=persistence_length, t0=pi)
+    harmonic_angles.params['dna-dna-dna'] = dict(k=PERSISTENCE_LENGTH, t0=PI)
+    harmonic_angles.params['dna-dsb-dna'] = dict(k=PERSISTENCE_LENGTH, t0=PI)
     integrator.forces.append(harmonic_angles)
 
     #   Define pairwise interactions
@@ -268,9 +261,9 @@ if __name__ == "__main__":
     group_tel = hoomd.filter.Type(["tel"])
     group_not_tel = hoomd.filter.SetDifference(f=group_all, g=group_tel)
 
-    cell = hoomd.md.nlist.Cell(buffer=0.4)
+    nlist = hoomd.md.nlist.Cell(buffer=0.4)
     #   Computes the radially shifted Lennard-Jones pair force on every particle in the simulation state
-    shifted_lj = hoomd.md.pair.ForceShiftedLJ(nlist=cell, default_r_cut=1.5)
+    shifted_lj = hoomd.md.pair.ForceShiftedLJ(nlist=nlist, default_r_cut=1.5)
     shifted_lj.params[('dna', 'dna')] = dict(epsilon=1.0, sigma=1.0)
     shifted_lj.params[('dna', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
     shifted_lj.params[('dna', 'tel')] = dict(epsilon=1.0, sigma=1.0)
@@ -278,22 +271,16 @@ if __name__ == "__main__":
     shifted_lj.params[('tel', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
     shifted_lj.params[('dsb', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
 
-    shifted_lj.r_cut[('dna', 'dna')] = 2**(1.0 / 6.0)
-    shifted_lj.r_cut[('dna', 'dsb')] = 2**(1.0 / 6.0)
-    shifted_lj.r_cut[('dna', 'tel')] = 2**(1.0 / 6.0)
-    shifted_lj.r_cut[('tel', 'tel')] = 2**(1.0 / 6.0)
-    shifted_lj.r_cut[('tel', 'dsb')] = 2**(1.0 / 6.0)
-    shifted_lj.r_cut[('dsb', 'dsb')] = 2**(1.0 / 6.0)
+    shifted_lj.r_cut[('dna', 'dna')] = 2 ** (1.0 / 6.0)
+    shifted_lj.r_cut[('dna', 'dsb')] = 2 ** (1.0 / 6.0)
+    shifted_lj.r_cut[('dna', 'tel')] = 2 ** (1.0 / 6.0)
+    shifted_lj.r_cut[('tel', 'tel')] = 2 ** (1.0 / 6.0)
+    shifted_lj.r_cut[('tel', 'dsb')] = 2 ** (1.0 / 6.0)
+    shifted_lj.r_cut[('dsb', 'dsb')] = 2 ** (1.0 / 6.0)
     integrator.forces.append(shifted_lj)
 
-    sphere_wall = WallSphere(radius=radius, origin=(0, 0, 0))
-    walls = [sphere_wall]
-    shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls)
-    shifted_lj_wall.params[particles_types] = {"epsilon": 1.0, "sigma": 2.0, "r_cut": 2**(1 / 6)}
-    integrator.forces.append(shifted_lj_wall)
-
-    manifold = ManifoldSphere(r=radius, P=(0, 0, 0))
-    nve_rattle_telo = NVE(filter=hoomd.filter.Type(["tel"]), manifold_constraint=manifold, tolerance=0.01)
+    sphere = hoomd.md.manifold.Sphere(r=RADIUS, P=(0, 0, 0))
+    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_tel, manifold_constraint=sphere, tolerance=0.01)
     integrator.methods.append(nve_rattle_telo)
 
     langevin = hoomd.md.methods.Langevin(filter=group_not_tel, kT=1)
@@ -304,12 +291,4 @@ if __name__ == "__main__":
     simulation.operations.integrator = integrator
 
     #   Calibration
-    simulation.run(1000)
-
-    pass
-
-    # calibration_save_path = os.path.join(snapshots_dir, 'calibration.gsd')
-    # if os.path.exists(calibration_save_path):
-    #     os.remove(calibration_save_path)
-    # hoomd.write.GSD.write(state=simulation.state, filename=calibration_save_path, mode='x')
-    #
+    simulation.run(10000)

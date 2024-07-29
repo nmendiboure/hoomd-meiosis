@@ -15,4 +15,3 @@ def is_debug() -> bool:
             return False
         else:
             return True
-
