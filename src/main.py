@@ -3,17 +3,8 @@ import hoomd
 import gsd.hoomd
 import os
 import numpy as np
-import plotly.graph_objects as go
 
-from utils import is_debug
-
-# The system state (aka a "snapshot") defined above is then used to initialize a HOOMD-blue simulation.
-try:
-    device = hoomd.device.GPU()
-    print(device.get_available_devices(), device.is_available())
-except:
-    device = hoomd.device.CPU()
-    print('No GPU found, using CPU')
+from utils import is_debug, get_device
 
 # CONSTANTS (Global)
 PI = np.pi
@@ -80,6 +71,7 @@ if __name__ == "__main__":
     PERSISTENCE_LENGTH = 10
     TIMEPOINTS = 10000
     PERIOD = 100
+    SIGMA = 1.0
 
     # Derived parameters
     L_POLY_SINGLE = [s for s, i in enumerate(L_POLY) if i % 2 == 0]
@@ -197,6 +189,7 @@ if __name__ == "__main__":
     --------------------------------------------    
     """
 
+    device = get_device()
     simulation = hoomd.Simulation(device=device, seed=SEED)
     simulation.create_state_from_gsd(lattice_init_path)
     integrator = hoomd.md.Integrator(dt=DT)
@@ -231,12 +224,12 @@ if __name__ == "__main__":
     nlist = hoomd.md.nlist.Cell(buffer=0.4)
     #   Computes the radially shifted Lennard-Jones pair force on every particle in the simulation state
     shifted_lj = hoomd.md.pair.ForceShiftedLJ(nlist=nlist, default_r_cut=1.5)
-    shifted_lj.params[('dna', 'dna')] = dict(epsilon=1.0, sigma=1.0)
-    shifted_lj.params[('dna', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
-    shifted_lj.params[('dna', 'tel')] = dict(epsilon=1.0, sigma=1.0)
-    shifted_lj.params[('tel', 'tel')] = dict(epsilon=1.0, sigma=1.0)
-    shifted_lj.params[('tel', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
-    shifted_lj.params[('dsb', 'dsb')] = dict(epsilon=1.0, sigma=1.0)
+    shifted_lj.params[('dna', 'dna')] = dict(epsilon=1.0, sigma=SIGMA)
+    shifted_lj.params[('dna', 'dsb')] = dict(epsilon=1.0, sigma=SIGMA)
+    shifted_lj.params[('dna', 'tel')] = dict(epsilon=1.0, sigma=SIGMA)
+    shifted_lj.params[('tel', 'tel')] = dict(epsilon=1.0, sigma=SIGMA)
+    shifted_lj.params[('tel', 'dsb')] = dict(epsilon=1.0, sigma=SIGMA)
+    shifted_lj.params[('dsb', 'dsb')] = dict(epsilon=1.0, sigma=SIGMA)
 
     shifted_lj.r_cut[('dna', 'dna')] = 2 ** (1.0 / 6.0)
     shifted_lj.r_cut[('dna', 'dsb')] = 2 ** (1.0 / 6.0)
@@ -258,9 +251,9 @@ if __name__ == "__main__":
     # Define the repulsive wall potential
     walls = [hoomd.wall.Sphere(radius=RADIUS, inside=True)]
     shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls=walls)
-    shifted_lj_wall.params["dna"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
-    shifted_lj_wall.params["dsb"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
-    shifted_lj_wall.params["tel"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
+    shifted_lj_wall.params["dna"] = {"epsilon": 1.0, "sigma": SIGMA, "r_cut": 2**(1/6)}
+    shifted_lj_wall.params["dsb"] = {"epsilon": 1.0, "sigma": SIGMA, "r_cut": 2**(1/6)}
+    shifted_lj_wall.params["tel"] = {"epsilon": 1.0, "sigma": SIGMA, "r_cut": 2**(1/6)}
     integrator.forces.append(shifted_lj_wall)
 
     simulation.operations.integrator = integrator
