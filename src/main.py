@@ -37,11 +37,19 @@ def random_point_on_sphere(radius):
     return np.array([x, y, z])
 
 
-def interpolate_points(start, end, num_points):
+def interpolate_points(start, end, num_points, max_deviation=0.5):
     vect = end - start
     unit_vect = vect / np.linalg.norm(vect)
     distances = np.linspace(0, np.linalg.norm(vect), num_points)
-    return np.array([start + distance * unit_vect for distance in distances])
+
+    # Introduce random deviation vectors perpendicular to the main vector
+    deviate_positions = []
+    for dist in distances:
+        deviation = np.random.uniform(-max_deviation, max_deviation, 3)
+        deviation -= deviation.dot(unit_vect) * unit_vect  # Make sure deviation is perpendicular
+        deviate_positions.append(start + dist * unit_vect + deviation)
+
+    return np.array(deviate_positions)
 
 
 def place_polymer_in_sphere(radius, num_particles):
@@ -54,55 +62,6 @@ def place_polymer_in_sphere(radius, num_particles):
     return polymer_positions
 
 
-def plot_polymer(polymer_positions, sizes, radius):
-
-    fig = go.Figure()
-    u, v = np.mgrid[0:2 * np.pi:100j, 0:np.pi:50j]
-    x = radius * np.cos(u) * np.sin(v)
-    y = radius * np.sin(u) * np.sin(v)
-    z = radius * np.cos(v)
-
-    fig.add_trace(go.Mesh3d(
-        x=x.flatten(),
-        y=y.flatten(),
-        z=z.flatten(),
-        color='lightpink',
-        opacity=0.1,
-        alphahull=0
-    ))
-
-    start = 0
-    colors = ['red', 'green', 'blue']
-    c = -1
-    for s, size in enumerate(sizes):
-        positions = polymer_positions[start:start+size]
-        start += size
-        if s % 2 == 0:
-            c += 1
-        fig.add_trace(go.Scatter3d(
-            x=positions[:, 0],
-            y=positions[:, 1],
-            z=positions[:, 2],
-            mode='lines+markers',
-            marker=dict(size=4, color=colors[c]),
-            line=dict(color=colors[c], width=2)
-        ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
-            yaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
-            zaxis=dict(nticks=4, range=[-radius - 1, radius + 1]),
-            aspectmode='cube'
-        ),
-        width=1920,
-        height=1080,
-        margin=dict(r=20, l=10, b=10, t=10)
-    )
-
-    fig.show()
-
-
 if __name__ == "__main__":
 
     """
@@ -113,7 +72,7 @@ if __name__ == "__main__":
 
     # Inputs parameters
     N_POLY = 4
-    L_POLY = [40, 40, 55, 55]
+    L_POLY = [50, 50, 60, 60]
     N_BREAKS = 8
     RADIUS = 16.0
     CALIBRATION_TIME = 10
@@ -155,8 +114,6 @@ if __name__ == "__main__":
         positions = place_polymer_in_sphere(RADIUS - 0.5, size)
         particles_positions.extend(positions)
     particles_positions = np.array(particles_positions)
-
-    # plot_polymer(particles_positions, L_POLY, RADIUS)
 
     particles_ids = list(range(N_PARTICLES))
     particles_types = ['dna', 'tel', 'dsb']
