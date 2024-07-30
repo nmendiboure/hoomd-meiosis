@@ -101,21 +101,23 @@ def plot_polymer(polymer_positions, sizes, radius):
 if __name__ == "__main__":
 
     """
-    ############################################
-    #####       Initial Parameters         #####
-    ############################################
+    --------------------------------------------
+    Initial Parameters
+    --------------------------------------------
     """
+
     N_POLY = 4
     L_POLY = [24, 24, 36, 36]
     N_BREAKS = 8
     N_PARTICLES = sum(L_POLY)
-    RADIUS = 16.0
+    RADIUS = 12.0
     L = 3 * RADIUS
     DT = 0.001
     CALIBRATION_TIME = 10
     MIN_DISTANCE_BINDING = 10.2
     PERSISTENCE_LENGTH = 10
-    PERIOD = 1000
+    TIMEPOINTS = 10000
+    PERIOD = 100
 
     if is_debug():
         #   if the debug mode is detected,
@@ -123,23 +125,24 @@ if __name__ == "__main__":
         debug = True
         NOTICE_LEVEL = 10
 
+    """
+    --------------------------------------------
+    Folder Setup
+    --------------------------------------------
+    """
+
     #   Create folders
     cwd = os.getcwd()
     data = os.path.join(os.path.dirname(cwd), 'data')
-    snapshots_dir = os.path.join(data, 'snapshots')
-    lattice_init_path = os.path.join(snapshots_dir, "lattice_init.gsd")
-
-    if os.path.exists(snapshots_dir):
-        shutil.rmtree(snapshots_dir)
-    os.makedirs(snapshots_dir, exist_ok=True)
-    os.makedirs(snapshots_dir, exist_ok=True)
+    lattice_init_path = os.path.join(data, "lattice_init.gsd")
+    os.makedirs(data, exist_ok=True)
     if os.path.exists(lattice_init_path):
         os.remove(lattice_init_path)
 
     """
-    ############################################
-    #####    Atoms Attributes Setup    #####
-    ############################################
+    --------------------------------------------
+    Atoms Attributes Setup
+    --------------------------------------------
     """
 
     particles_positions = []
@@ -197,9 +200,9 @@ if __name__ == "__main__":
     homologous_breaks_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, breaks_ids))[0]]
 
     """
-    ############################################
-    #####         Hoomd Init Frame         #####
-    ############################################
+    --------------------------------------------
+    Hoomd Init Frame
+    --------------------------------------------
     """
 
     frame = gsd.hoomd.Frame()
@@ -225,9 +228,9 @@ if __name__ == "__main__":
         f.append(frame)
 
     """
-    ############################################
-    #####   Initialize the simulation      #####
-    ############################################
+    --------------------------------------------
+    Initialize the simulation
+    --------------------------------------------    
     """
 
     simulation = hoomd.Simulation(device=device, seed=SEED)
@@ -235,9 +238,9 @@ if __name__ == "__main__":
     integrator = hoomd.md.Integrator(dt=DT)
 
     """
-    ############################################
-    #####            Define Forces         #####
-    ############################################
+    --------------------------------------------
+    Define Forces
+    --------------------------------------------
     """
 
     # Set up the molecular dynamics simulation
@@ -290,5 +293,21 @@ if __name__ == "__main__":
 
     simulation.operations.integrator = integrator
 
+    """
+    --------------------------------------------
+    Writer Setup
+    --------------------------------------------
+    """
+
+    # Define the GSD writer to take snapshots every 100 steps
+    gsd_writer = hoomd.write.GSD(
+        filename=os.path.join(data, "trajectory.gsd"),
+        trigger=hoomd.trigger.Periodic(PERIOD),
+        mode='wb',
+        filter=hoomd.filter.All()
+    )
+    simulation.operations.writers.append(gsd_writer)
+
     #   Calibration
-    simulation.run(10000)
+    simulation.run(100000)
+
