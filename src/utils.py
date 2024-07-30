@@ -2,13 +2,21 @@ import sys
 import hoomd
 
 
-def get_device() -> hoomd.device:
+def get_device(notice_level=3):
+    """
+    Initialise HOOMD on the CPU or GPU, based on availability
+    """
+
     try:
-        device = hoomd.device.GPU()
-        print(device.get_available_devices(), device.is_available())
-    except:
-        device = hoomd.device.CPU()
-        print('No GPU found, using CPU')
+        device = hoomd.device.GPU(notice_level=notice_level)
+
+        print("HOOMD is running on the following GPU(s):")
+        print("\n".join(device.devices))
+
+    except RuntimeError:
+        device = hoomd.device.CPU(notice_level=notice_level)
+
+        print("HOOMD is running on the CPU")
 
     return device
 

@@ -4,8 +4,8 @@ import gsd.hoomd
 import os
 import numpy as np
 
-from utils import is_debug, get_device
-from init import place_polymer_in_sphere
+import init
+import utils
 
 # CONSTANTS (Global)
 PI = np.pi
@@ -13,7 +13,7 @@ SEED = 42
 NOTICE_LEVEL = 2
 np.random.seed(SEED)
 random.seed(SEED)
-if is_debug():
+if utils.is_debug():
     #   if the debug mode is detected,
     #   increase the notice level
     debug = True
@@ -68,12 +68,6 @@ if __name__ == "__main__":
     --------------------------------------------
     """
 
-    particles_positions = []
-    for size in L_POLY:
-        positions = place_polymer_in_sphere(RADIUS - 0.5, size)
-        particles_positions.extend(positions)
-    particles_positions = np.array(particles_positions)
-
     particles_ids = list(range(N_PARTICLES))
     particles_types = ['dna', 'tel', 'dsb']
     particles_typeid = []
@@ -83,6 +77,12 @@ if __name__ == "__main__":
     particles_typeid = np.array(particles_typeid)
     telomeres_ids = np.where(particles_typeid == 1)[0]
     not_telomeres_ids = np.where(particles_typeid == 0)[0]
+
+    particles_positions = []
+    for size in L_POLY:
+        positions = init.place_polymer_in_sphere(RADIUS - 0.5, size)
+        particles_positions.extend(positions)
+    particles_positions = np.array(particles_positions)
 
     homologous_pairs = []
     counter = 0
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     --------------------------------------------    
     """
 
-    device = get_device()
+    device = utils.get_device()
     simulation = hoomd.Simulation(device=device, seed=SEED)
     simulation.create_state_from_gsd(lattice_init_path)
     integrator = hoomd.md.Integrator(dt=DT)
