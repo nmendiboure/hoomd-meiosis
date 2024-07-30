@@ -2,7 +2,6 @@ import random
 import hoomd
 import gsd.hoomd
 import os
-import shutil
 import numpy as np
 import plotly.graph_objects as go
 
@@ -16,11 +15,17 @@ except:
     device = hoomd.device.CPU()
     print('No GPU found, using CPU')
 
+# CONSTANTS (Global)
 PI = np.pi
 SEED = 42
 NOTICE_LEVEL = 2
 np.random.seed(SEED)
 random.seed(SEED)
+if is_debug():
+    #   if the debug mode is detected,
+    #   increase the notice level
+    debug = True
+    NOTICE_LEVEL = 10
 
 
 def random_point_on_sphere(radius):
@@ -42,7 +47,7 @@ def interpolate_points(start, end, num_points):
 def place_polymer_in_sphere(radius, num_particles):
     telo1_pos = random_point_on_sphere(radius)
     telo2_pos = random_point_on_sphere(radius)
-    while np.linalg.norm(telo1_pos - telo2_pos) < radius:
+    while np.linalg.norm(telo1_pos - telo2_pos) < radius * 1.8:
         telo2_pos = random_point_on_sphere(radius)
 
     polymer_positions = interpolate_points(telo1_pos, telo2_pos, num_particles)
@@ -106,24 +111,24 @@ if __name__ == "__main__":
     --------------------------------------------
     """
 
+    # Inputs parameters
     N_POLY = 4
-    L_POLY = [24, 24, 36, 36]
+    L_POLY = [40, 40, 55, 55]
     N_BREAKS = 8
-    N_PARTICLES = sum(L_POLY)
-    RADIUS = 12.0
-    L = 3 * RADIUS
-    DT = 0.001
+    RADIUS = 16.0
     CALIBRATION_TIME = 10
     MIN_DISTANCE_BINDING = 10.2
     PERSISTENCE_LENGTH = 10
     TIMEPOINTS = 10000
     PERIOD = 100
 
-    if is_debug():
-        #   if the debug mode is detected,
-        #   increase the notice level
-        debug = True
-        NOTICE_LEVEL = 10
+    # Derived parameters
+    L_POLY_SINGLE = [s for s, i in enumerate(L_POLY) if i % 2 == 0]
+    N_PARTICLES = sum(L_POLY)
+    N_BONDS = N_PARTICLES - N_POLY
+    N_ANGLES = N_PARTICLES - N_POLY * 2
+    L = 3 * RADIUS
+    DT = 0.001
 
     """
     --------------------------------------------
@@ -147,7 +152,7 @@ if __name__ == "__main__":
 
     particles_positions = []
     for size in L_POLY:
-        positions = place_polymer_in_sphere(RADIUS, size)
+        positions = place_polymer_in_sphere(RADIUS - 0.5, size)
         particles_positions.extend(positions)
     particles_positions = np.array(particles_positions)
 
@@ -160,6 +165,8 @@ if __name__ == "__main__":
         for i in range(s):
             particles_typeid.append(1 if i == 0 or i == s - 1 else 0)
     particles_typeid = np.array(particles_typeid)
+    telomeres_ids = np.where(particles_typeid == 1)[0]
+    not_telomeres_ids = np.where(particles_typeid == 0)[0]
 
     homologous_pairs = []
     counter = 0
@@ -170,15 +177,15 @@ if __name__ == "__main__":
         counter += 2 * size
     homologous_pairs = np.array(homologous_pairs)
 
-    n_bonds = N_PARTICLES - N_POLY
-    bonds_group = np.zeros((n_bonds, 2), dtype=int)
+    N_BONDS = N_PARTICLES - N_POLY
+    bonds_group = np.zeros((N_BONDS, 2), dtype=int)
     bonds_types = ["dna-telo", "dna-dna", "dna-dsb", "dsb-dsb"]
     bonds_typeid = np.array(
         [bonds_types.index("dna-telo") if i == 0 or i == size - 2 else bonds_types.index("dna-dna")
          for size in L_POLY for i in range(size - 1)])
 
-    n_angles = N_PARTICLES - N_POLY * 2
-    angles_group = np.zeros((n_angles, 3), dtype=int)
+    N_ANGLES = N_PARTICLES - N_POLY * 2
+    angles_group = np.zeros((N_ANGLES, 3), dtype=int)
     angles_types = ["dna-dna-dna", "dna-dsb-dna"]
     angles_typeid = np.array([angles_types.index("dna-dna-dna") for size in L_POLY for i in range(size - 2)])
 
@@ -195,7 +202,7 @@ if __name__ == "__main__":
             angles_group[a_counter] = [start + a, start + a + 1, start + a + 2]
             a_counter += 1
 
-    breaks_ids = np.random.choice(particles_ids, N_BREAKS, replace=False)
+    breaks_ids = np.random.choice(not_telomeres_ids, N_BREAKS, replace=False)
     particles_typeid[breaks_ids] = particles_types.index('dsb')
     homologous_breaks_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, breaks_ids))[0]]
 
@@ -211,12 +218,12 @@ if __name__ == "__main__":
     frame.particles.typeid = particles_typeid
     frame.particles.position = particles_positions
 
-    frame.bonds.N = n_bonds
+    frame.bonds.N = N_BONDS
     frame.bonds.group = bonds_group
     frame.bonds.typeid = bonds_typeid
     frame.bonds.types = bonds_types
 
-    frame.angles.N = n_angles
+    frame.angles.N = N_ANGLES
     frame.angles.group = angles_group
     frame.angles.typeid = angles_typeid
     frame.angles.types = angles_types
@@ -291,6 +298,14 @@ if __name__ == "__main__":
     langevin.gamma['dsb'] = 0.2
     integrator.methods.append(langevin)
 
+    # Define the repulsive wall potential
+    walls = [hoomd.wall.Sphere(radius=RADIUS, inside=True)]
+    shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls=walls)
+    shifted_lj_wall.params["dna"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
+    shifted_lj_wall.params["dsb"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
+    shifted_lj_wall.params["tel"] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2**(1/6)}
+    integrator.forces.append(shifted_lj_wall)
+
     simulation.operations.integrator = integrator
 
     """
@@ -299,7 +314,7 @@ if __name__ == "__main__":
     --------------------------------------------
     """
 
-    # Define the GSD writer to take snapshots every 100 steps
+    # Define the GSD writer to take snapshots every PERIOD steps
     gsd_writer = hoomd.write.GSD(
         filename=os.path.join(data, "trajectory.gsd"),
         trigger=hoomd.trigger.Periodic(PERIOD),
@@ -309,5 +324,6 @@ if __name__ == "__main__":
     simulation.operations.writers.append(gsd_writer)
 
     #   Calibration
+    print("Calibrating...")
     simulation.run(100000)
 
