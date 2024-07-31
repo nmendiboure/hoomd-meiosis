@@ -1,0 +1,21 @@
+name: polychrom-hoomd
+channels:
+    - conda-forge
+dependencies:
+    - pip
+    - python
+    - numpy
+    - scipy
+    - matplotlib
+    - pandas
+    - hoomd=*gpu*
+    - fresnel
+    - gsd
+    - joblib
+    - pyside2
+    - ipython
+    - notebook
+    - jupyter
+    - pyyaml
+    - requests
+
