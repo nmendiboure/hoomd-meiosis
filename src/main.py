@@ -15,7 +15,7 @@ PI = math.pi
 
 if __name__ == "__main__":
     """--------------------------------------------
-    0 - Initial Parameters
+    I - Initialization
     --------------------------------------------"""
 
     ptc = protocol.Protocol("config.yaml")
@@ -38,17 +38,21 @@ if __name__ == "__main__":
     simulation = hoomd.Simulation(device=device, seed=ptc.seed)
 
     """--------------------------------------------
-    I - Build the chromosomes
+    II - Build the environment
     --------------------------------------------"""
 
-    """----------------------------
-    I_1 - Set up boxes and spheres
-    -----------------------------"""
+    """-------------------
+    II_1 - Box and Sphere
+    -------------------"""
 
     simBox = math.ceil((n_particles / ptc.density) ** (1 / 3.0))
     simBox = simBox + 1 if simBox % 2 != 0 else simBox
     radius = simBox / 2
     inscribedBox = math.floor(2 * radius / np.sqrt(3))
+
+    """-------------------
+    II_2 - Chr placement
+    -------------------"""
 
     # Create a sphere in Blender
     if ptc.blender:
@@ -59,19 +63,20 @@ if __name__ == "__main__":
     with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
 
-    """--------------------------------------------
-    III - Groups
-    --------------------------------------------"""
+    """-------------------
+    II_3 - Groups
+    -------------------"""
+
     group_all = hoomd.filter.All()
     group_tel = hoomd.filter.Type(["tel"])
     group_not_tel = hoomd.filter.SetDifference(f=group_all, g=group_tel)
 
     """--------------------------------------------
-    IV - Groups
+    III - Forces 
     --------------------------------------------"""
 
     """-------------------
-    IV_1 - Bonded Forces
+    III_1 - Bonded Forces
     -------------------"""
     # Set up the molecular dynamics simulation
     # Define bond strength and type
@@ -85,7 +90,7 @@ if __name__ == "__main__":
     harmonic_angles.params['dna-dsb-dna'] = dict(k=ptc.persistence_length, t0=PI)
 
     """-------------------
-    IV_2 - Pairwise Forces
+    III_2 - Pairwise Forces
     -------------------"""
 
     nlist = hoomd.md.nlist.Cell(buffer=0.4)
@@ -93,7 +98,7 @@ if __name__ == "__main__":
     shifted_lj.params.default = dict(epsilon=1.0, sigma=ptc.sigma, r_cut=2 ** (1 / 6))
 
     """-------------------
-    IV_3 - External Forces
+    III_3 - External Forces
     -------------------"""
     # Defined a manifold rattle to keep telomere tethered onto the nucleus surface
     sphere = hoomd.md.manifold.Sphere(r=radius, P=(0, 0, 0))
@@ -105,23 +110,13 @@ if __name__ == "__main__":
     shifted_lj_wall.params.default = dict(epsilon=1.0, sigma=ptc.sigma, r_cut=2 ** (1 / 6))
 
     """-------------------
-    IV_4 - Thermostat
+    III_4 - Thermostat
     -------------------"""
 
     langevin = hoomd.md.methods.Langevin(filter=group_not_tel, kT=1)
 
     """--------------------------------------------
-    V - Integrators
-    --------------------------------------------"""
-
-    run_integrator = hoomd.md.Integrator(
-        dt=ptc.dt_langevin,
-        methods=[nve_rattle_telo, langevin],
-        forces=[harmonic_bonds, harmonic_angles, shifted_lj, shifted_lj_wall]
-    )
-
-    """--------------------------------------------
-    VI - Calibration - Fire
+    IV - Calibration - Fire
     --------------------------------------------"""
 
     if os.path.exists(calib_traj_path) and not ptc.force_fire:
@@ -191,8 +186,14 @@ if __name__ == "__main__":
     simulation.state.thermalize_particle_momenta(filter=group_all, kT=1.0)
 
     """--------------------------------------------
-    VII - Run the simulation
+    V - Run the simulation
     --------------------------------------------"""
+
+    run_integrator = hoomd.md.Integrator(
+        dt=ptc.dt_langevin,
+        methods=[nve_rattle_telo, langevin],
+        forces=[harmonic_bonds, harmonic_angles, shifted_lj, shifted_lj_wall]
+    )
 
     simulation.operations.integrator = run_integrator
 
