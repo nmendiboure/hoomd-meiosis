@@ -1,0 +1,17 @@
+seed: 1999
+n_poly: 4
+l_poly: [100, 100, 160, 160]
+n_breaks: 8
+persistence_length: 30
+sigma: 1.0
+blender: True
+density: 0.01
+notice_level: 3
+force_fire: True
+n_fire_blocks: 25
+n_fire_steps: 1000
+n_run_blocks: 100
+n_run_steps: 10000
+dt_langevin: 0.001
+dt_fire: 0.0005
+
