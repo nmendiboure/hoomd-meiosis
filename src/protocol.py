@@ -15,6 +15,8 @@ class Protocol(object):
         self.persistence_length = None
         self.density = None
         self.sigma = None
+        self.rtm_prob = None
+        self.rtm_magnitude = None
         self.n_fire_blocks = None
         self.n_fire_steps = None
         self.n_run_blocks = None

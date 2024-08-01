@@ -2,6 +2,7 @@ import os
 import time
 import math
 import hoomd
+import random
 import gsd.hoomd
 import numpy as np
 
@@ -11,6 +12,40 @@ import src.blender as blender
 import src.protocol as protocol
 
 PI = math.pi
+
+
+def compute_rtm(simulation, telo_ids, prob, mag):
+    """
+    Compute the RTM (Rapid Telomere Movements) of the telomeres
+    """
+    snapshot = simulation.state.get_snapshot()
+    if snapshot.communicator.rank == 0:
+        positions = snapshot.particles.position
+
+        for telo_id in telo_ids:
+            if random.random() < prob:
+                pos = positions[telo_id]
+                r = np.linalg.norm(pos)
+                radial_dir = pos / r
+
+                # Generate a random tangent direction on the sphere surface
+                random_vector = np.random.normal(size=3)
+                random_vector -= random_vector.dot(radial_dir) * radial_dir  # Make it perpendicular to radial_dir
+                tangent_dir = random_vector / np.linalg.norm(random_vector)
+
+                # Apply the movement along the tangent direction
+                new_pos = pos + mag * tangent_dir
+
+                e = 0.05
+                while np.linalg.norm(new_pos) > r:
+                    new_pos = radius * (new_pos / np.linalg.norm(new_pos))
+                    e += 0.05
+
+                # Update the position in the snapshot
+                positions[telo_id] = new_pos
+
+        # Update the positions in the simulation state
+        simulation.state.set_snapshot(snapshot)
 
 
 if __name__ == "__main__":
@@ -60,6 +95,7 @@ if __name__ == "__main__":
 
     chromosomes_setup = build.set_chromosomes(ptc.n_poly, ptc.l_poly, ptc.n_breaks, simBox, inscribedBox)
     frame = chromosomes_setup.get('frame', None)
+    telo_ids = chromosomes_setup.get('telomeres', None)
     with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
 
@@ -215,7 +251,10 @@ if __name__ == "__main__":
               f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
               f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}')
 
+        # compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude)
+
     print("Simulation done. \n")
+
 
     # TODO : add RTM (Telomere Rapid Movements)
     # TODO : add synaptonemal complex formation (and disassembly)
