@@ -18,4 +18,7 @@ dependencies:
     - jupyter
     - pyyaml
     - requests
+    - pip:
+          -bpy
+
 
