@@ -88,7 +88,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
     print(f"{n_poly} polymers with lengths {l_poly}")
     print(f"{n_particles} particles")
     print(f"{n_breaks} random breaks")
-    print(f"{n_bonds} bonds and {n_angles}")
+    print(f"{n_bonds} bonds and {n_angles} angles")
     print(f"HOOMD frame with box size {simBoxSize} generated \n")
 
     return res
