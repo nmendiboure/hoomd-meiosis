@@ -1,5 +1,6 @@
 import os
 import time
+import math
 import hoomd
 import gsd.hoomd
 import random
@@ -7,6 +8,7 @@ import numpy as np
 
 import src.utils as utils
 import src.build as build
+import src.blender as blender
 
 # CONSTANTS (Global)
 PI = np.pi
@@ -25,30 +27,29 @@ if __name__ == "__main__":
 
     # Inputs parameters
     N_POLY = 4
-    L_POLY = [120, 120, 160, 160]
+    L_POLY = [300, 300, 500, 500]
     N_BREAKS = 8
-    RADIUS = 16
     CALIBRATION_TIME = 10
     MIN_DISTANCE_BINDING = 10.2
     PERSISTENCE_LENGTH = 10
     TIMEPOINTS = 10000
     PERIOD = 100
     SIGMA = 1.0
+    BLENDER = True
 
     N_FIRE_BLOCKS = 10
     N_FIRE_STEPS = 1000
     NUM_BLOCKS = 100
     BLOCK_SIZE = 10000
 
-
     # Derived parameters
     L_POLY_SINGLE = [s for s, i in enumerate(L_POLY) if i % 2 == 0]
     N_PARTICLES = sum(L_POLY)
     N_BONDS = N_PARTICLES - N_POLY
     N_ANGLES = N_PARTICLES - N_POLY * 2
-    L = 3 * RADIUS
     DT_LANGEVIN = 0.001
     DT_FIRE = 0.0005
+    DENSITY = 0.05
 
     #   Create folders
     cwd = os.getcwd()
@@ -65,10 +66,24 @@ if __name__ == "__main__":
     I - Build the chromosomes
     --------------------------------------------"""
 
+    """----------------------------
+    I_1 - Set up boxes and spheres
+    -----------------------------"""
+
+    SIM_BOX = math.ceil((N_PARTICLES / DENSITY) ** (1 / 3.0))
+    SIM_BOX = SIM_BOX + 1 if SIM_BOX % 2 != 0 else SIM_BOX
+
+    RADIUS = SIM_BOX / 2
+    INSCRIBED_BOX = math.floor(2 * RADIUS / np.sqrt(3))
+
+    # Create a sphere in Blender
+    if BLENDER:
+        blender.make_sphere(RADIUS, os.path.join(data, f"sphere{RADIUS}.obj"))
+
     #TODO : determine the best sphere size for the number of particles and
     # then the best box size for the sphere size
 
-    chromosomes_setup = build.set_chromosomes(N_POLY, L_POLY, N_BREAKS, RADIUS, L)
+    chromosomes_setup = build.set_chromosomes(N_POLY, L_POLY, N_BREAKS, SIM_BOX, INSCRIBED_BOX)
     frame = chromosomes_setup.get('frame', None)
     with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
@@ -168,7 +183,7 @@ if __name__ == "__main__":
         filename=calib_traj_path,
         trigger=hoomd.trigger.Periodic(N_FIRE_STEPS),
         filter=group_all,
-        mode='wb'
+        mode='xb'
     )
     simulation.operations.writers.append(gsd_optimized_writer)
 
@@ -177,6 +192,7 @@ if __name__ == "__main__":
     thermodynamic_properties = hoomd.md.compute.ThermodynamicQuantities(filter=group_all)
     simulation.operations.computes.append(thermodynamic_properties)
 
+    print("Calibrating the system...")
     # we need to run the simulation (even if for 0 steps) to apply the forces and compute the thermodynamic properties
     simulation.run(0)
     print(f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
@@ -198,6 +214,8 @@ if __name__ == "__main__":
     # FIRE reduces the kinetic energy of particles, so we need to re-thermalize the system
     simulation.state.thermalize_particle_momenta(filter=group_all, kT=1.0)
 
+    print("Calibration done. \n")
+
     """--------------------------------------------
     VII - Run the simulation
     --------------------------------------------"""
@@ -210,17 +228,19 @@ if __name__ == "__main__":
         trigger=hoomd.trigger.Periodic(BLOCK_SIZE),
         dynamic=['property', 'momentum'],
         filter=group_all,
-        mode='wb'
+        mode='xb'
     )
-
     simulation.operations.writers.append(gsd_writer)
+
+    print("Running the simulation...")
     for i in range(0, NUM_BLOCKS):
         start = time.time()
         simulation.run(BLOCK_SIZE)
-        print(f'block #{i+1} / {N_FIRE_BLOCKS}, '
+        print(f'block #{i+1} / {NUM_BLOCKS}, '
               f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
               f'E_P/N = {thermodynamic_properties.potential_energy / N_PARTICLES:.3g}')
 
+    print("Simulation done. \n")
 
     # TODO : add RTM (Telomere Rapid Movements)
     # TODO : add synaptonemal complex formation (and disassembly)

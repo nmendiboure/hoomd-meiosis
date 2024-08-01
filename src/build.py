@@ -4,11 +4,8 @@ import gsd.hoomd
 import init
 
 
-def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, radius: int, box_size: int) -> dict:
-    
-    if isinstance(radius, float):
-        radius = int(radius)
-        
+def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: int, inscribedBoxSize) -> dict:
+
     n_particles = sum(l_poly)
     particles_types = ['dna', 'tel', 'dsb']
     particles_typeid = []
@@ -19,7 +16,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, radius: int, 
     telomeres_ids = np.where(particles_typeid == 1)[0]
     not_telomeres_ids = np.where(particles_typeid == 0)[0]
     
-    monomer_positions = init.lattice_cubic(n_particles=n_particles, radius=radius-2)
+    monomer_positions = init.lattice_cubic(n_particles=n_particles, boxSize=inscribedBoxSize)
     
     homologous_pairs = []
     counter = 0
@@ -75,7 +72,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, radius: int, 
     frame.angles.typeid = angles_typeid
     frame.angles.types = angles_types
     
-    frame.configuration.box = [box_size, box_size, box_size, 0, 0, 0]
+    frame.configuration.box = [simBoxSize] * 3 + [0] * 3
     frame.configuration.dimensions = 3
     
     res = {
@@ -86,11 +83,12 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, radius: int, 
         "telomeres": telomeres_ids,
         "not_telomeres": not_telomeres_ids
     }
-    
-    print(f"{n_poly} polymers with lengths {l_poly} \n")
-    print(f"{n_particles} particles \n")
-    print(f"{n_breaks} random breaks\n")
-    print(f"{n_bonds} bonds and {n_angles} \n")
-    print(f"HOOMD frame with box size {box_size} generated\n")
+
+    print("\n")
+    print(f"{n_poly} polymers with lengths {l_poly}")
+    print(f"{n_particles} particles")
+    print(f"{n_breaks} random breaks")
+    print(f"{n_bonds} bonds and {n_angles}")
+    print(f"HOOMD frame with box size {simBoxSize} generated \n")
 
     return res

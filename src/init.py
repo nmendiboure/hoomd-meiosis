@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 
 def random_point_on_sphere(radius):
@@ -35,17 +36,26 @@ def rods_in_sphere(radius, num_particles, deviation: float = 0.5):
     return polymer_positions
 
 
-def lattice_cubic(n_particles, radius):
-    """
-    Inspired from polychrom-hoomd (Mirnylab
-    """
-    if isinstance(radius, float):
-        radius = int(radius)
+def lattice_cubic(n_particles, boxSize):
 
-    t = radius // 2
+    """
+    Inspired from polychrom-hoomd (Mirnylab)
+    """
+    
+    if n_particles > boxSize**3:
+        raise ValueError("Steps has to be less than size^3")
+    if n_particles > 0.9 * boxSize**3:
+        warnings.warn("N > 0.9 * boxSize**3. It will be slow")
+    if n_particles % 2 != 0:
+        raise ValueError("N has to be multiple of 2 for rings")
+
+    if isinstance(boxSize, float):
+        boxSize = int(boxSize)
+
+    t = boxSize // 2
     a = [(t, t, t), (t, t, t + 1), (t, t + 1, t + 1), (t, t + 1, t)]
 
-    b = np.zeros((radius + 2, radius + 2, radius + 2), int)
+    b = np.zeros((boxSize + 2, boxSize + 2, boxSize + 2), int)
     for i in a:
         b[i] = 1
 
@@ -80,8 +90,8 @@ def lattice_cubic(n_particles, radius):
                 and (b[tuple(t4)] == 0)
                 and (np.min(t3) >= 1)
                 and (np.min(t4) >= 1)
-                and (np.max(t3) < radius + 1)
-                and (np.max(t4) < radius + 1)
+                and (np.max(t3) < boxSize + 1)
+                and (np.max(t4) < boxSize + 1)
             ):
                 a.insert(t + 1, tuple(t3))
                 a.insert(t + 2, tuple(t4))
