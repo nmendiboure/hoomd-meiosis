@@ -20,5 +20,9 @@ dependencies:
     - requests
     - pip:
           -bpy
+          - git+https://github.com/open2c/polykit.git
+          - git+https://github.com/open2c/cooltools.git
+          - git+https://github.com/mtortora/lattice-translocators.git
+          - git+https://github.com/open2c/polychrom-hoomd.git
 
 
