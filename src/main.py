@@ -16,28 +16,27 @@ PI = math.pi
 
 def compute_rtm(simulation, telo_ids, prob: float, mag: float, manifold: hoomd.md.manifold.Manifold):
 
-    last_force = simulation.operations.integrator.forces[-1]
-    if isinstance(last_force, hoomd.md.force.ActiveOnManifold):
-        simulation.operations.integrator.forces.pop()
+    for force in simulation.operations.integrator.forces:
+        if isinstance(force, hoomd.md.force.ActiveOnManifold):
+            simulation.operations.integrator.forces.remove(force)
 
-    # Initialize the active force on the manifold
-    active_force = hoomd.md.force.ActiveOnManifold(
-        filter=group_tel,
-        manifold_constraint=manifold,
-    )
+    pass
+    for telo in telo_ids:
+        if random.random() < prob:
+            one_telo = hoomd.filter.Tags([telo])
+            active_force = hoomd.md.force.ActiveOnManifold(
+                filter=one_telo,
+                manifold_constraint=manifold,
+            )
 
-    if random.random() < prob:
-        # Generate a random direction vector
-        dir_vec = np.random.uniform(-1, 1, 3)
-        dir_vec /= np.linalg.norm(dir_vec)
+            dir_vec = np.random.uniform(-1, 1, 3)
+            dir_vec /= np.linalg.norm(dir_vec)
 
-        # Calculate the force components
-        force = mag * dir_vec
-        active_force.active_force['tel'] = tuple(force)
-    else:
-        active_force.active_force['tel'] = (0.0, 0.0, 0.0)
+            # Calculate the force components
+            force = mag * dir_vec
+            active_force.active_force["tel"] = force
 
-    simulation.operations.integrator.forces.append(active_force)
+            simulation.operations.integrator.forces.append(active_force)
 
 
 if __name__ == "__main__":
@@ -101,8 +100,8 @@ if __name__ == "__main__":
     -------------------"""
 
     group_all = hoomd.filter.All()
-    group_tel = hoomd.filter.Type(["tel"])
-    group_not_tel = hoomd.filter.SetDifference(f=group_all, g=group_tel)
+    group_telo = hoomd.filter.Type(["tel"])
+    group_not_telo = hoomd.filter.SetDifference(f=group_all, g=group_telo)
 
     """--------------------------------------------
     III - Forces 
@@ -135,7 +134,7 @@ if __name__ == "__main__":
     -------------------"""
     # Defined a manifold rattle to keep telomere tethered onto the nucleus surface
     sphere = hoomd.md.manifold.Sphere(r=radius, P=(0, 0, 0))
-    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_tel, manifold_constraint=sphere, tolerance=0.01)
+    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=0.01)
 
     # Define the repulsive wall potential of the nucleus (sphere)
     walls = [hoomd.wall.Sphere(radius=radius, inside=True)]
@@ -146,7 +145,7 @@ if __name__ == "__main__":
     III_4 - Thermostat
     -------------------"""
 
-    langevin = hoomd.md.methods.Langevin(filter=group_not_tel, kT=1)
+    langevin = hoomd.md.methods.Langevin(filter=group_not_telo, kT=1)
 
     """-------------------
     III_5 - Thermodinamics
@@ -252,7 +251,7 @@ if __name__ == "__main__":
               f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
               f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}')
 
-        # compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
+        compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
 
     print("Simulation done. \n")
 

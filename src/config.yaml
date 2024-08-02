@@ -1,21 +1,24 @@
-seed: 1999
+seed: 42
 n_poly: 4
 l_poly: [24, 24, 36, 36]
 n_breaks: 4
 persistence_length: 30
-rtm_prob: 0.05
-rtm_magnitude: 100
+rtm_prob: 0.1
+rtm_magnitude: 7.
 sigma: 1.0
 blender: True
 density: 0.01
 notice_level: 3
+
+# fire
+dt_fire: 0.0005
 force_fire: False
 n_fire_blocks: 100
 n_fire_steps: 1000
 
+# run
 n_run_blocks: 1000
 n_run_steps: 10000
 period_trigger_run: 100
-dt_langevin: 0.0001
-dt_fire: 0.0005
+dt_langevin: 0.001
 
