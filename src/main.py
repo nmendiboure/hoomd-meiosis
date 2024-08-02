@@ -14,38 +14,30 @@ import src.protocol as protocol
 PI = math.pi
 
 
-def compute_rtm(simulation, telo_ids, prob, mag):
-    """
-    Compute the RTM (Rapid Telomere Movements) of the telomeres
-    """
-    snapshot = simulation.state.get_snapshot()
-    if snapshot.communicator.rank == 0:
-        positions = snapshot.particles.position
+def compute_rtm(simulation, telo_ids, prob: float, mag: float, manifold: hoomd.md.manifold.Manifold):
 
-        for telo_id in telo_ids:
-            if random.random() < prob:
-                pos = positions[telo_id]
-                r = np.linalg.norm(pos)
-                radial_dir = pos / r
+    last_force = simulation.operations.integrator.forces[-1]
+    if isinstance(last_force, hoomd.md.force.ActiveOnManifold):
+        simulation.operations.integrator.forces.pop()
 
-                # Generate a random tangent direction on the sphere surface
-                random_vector = np.random.normal(size=3)
-                random_vector -= random_vector.dot(radial_dir) * radial_dir  # Make it perpendicular to radial_dir
-                tangent_dir = random_vector / np.linalg.norm(random_vector)
+    # Initialize the active force on the manifold
+    active_force = hoomd.md.force.ActiveOnManifold(
+        filter=group_tel,
+        manifold_constraint=manifold,
+    )
 
-                # Apply the movement along the tangent direction
-                new_pos = pos + mag * tangent_dir
+    if random.random() < prob:
+        # Generate a random direction vector
+        dir_vec = np.random.uniform(-1, 1, 3)
+        dir_vec /= np.linalg.norm(dir_vec)
 
-                e = 0.05
-                while np.linalg.norm(new_pos) > r:
-                    new_pos = radius * (new_pos / np.linalg.norm(new_pos))
-                    e += 0.05
+        # Calculate the force components
+        force = mag * dir_vec
+        active_force.active_force['tel'] = tuple(force)
+    else:
+        active_force.active_force['tel'] = (0.0, 0.0, 0.0)
 
-                # Update the position in the snapshot
-                positions[telo_id] = new_pos
-
-        # Update the positions in the simulation state
-        simulation.state.set_snapshot(snapshot)
+    simulation.operations.integrator.forces.append(active_force)
 
 
 if __name__ == "__main__":
@@ -245,7 +237,7 @@ if __name__ == "__main__":
     # Define the GSD writer to take snapshots every PERIOD steps
     gsd_writer = hoomd.write.GSD(
         filename=trajectory_path,
-        trigger=hoomd.trigger.Periodic(ptc.n_run_steps),
+        trigger=hoomd.trigger.Periodic(ptc.period_trigger_run),
         dynamic=['property', 'momentum'],
         filter=group_all,
         mode='xb'
@@ -260,7 +252,7 @@ if __name__ == "__main__":
               f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
               f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}')
 
-        # compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude)
+        # compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
 
     print("Simulation done. \n")
 
