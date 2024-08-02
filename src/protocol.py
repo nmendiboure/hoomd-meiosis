@@ -21,6 +21,7 @@ class Protocol(object):
         self.n_fire_steps = None
         self.n_run_blocks = None
         self.n_run_steps = None
+        self.period_trigger_run = None
         self.dt_langevin = None
         self.dt_fire = None
         self.blender = None
