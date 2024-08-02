@@ -79,18 +79,23 @@ if __name__ == "__main__":
     """-------------------
     II_1 - Box and Sphere
     -------------------"""
+    # 1 - create a simulation box
+    # 2 - create a sphere inside of the box
+    # 3 - make an inscribed box inside of the sphere to place the chromosomes in lattice
+    # 4 - increase by little the size of the simulation box to avoid boundary effects
 
     simBox = math.ceil((n_particles / ptc.density) ** (1 / 3.0))
     simBox = simBox + 1 if simBox % 2 != 0 else simBox
     radius = simBox / 2
     inscribedBox = math.floor(2 * radius / np.sqrt(3))
+    simBox += 4
 
     """-------------------
     II_2 - Chr placement
     -------------------"""
 
     # Create a sphere in Blender
-    if ptc.blender:
+    if ptc.blender and not os.path.exists(os.path.join(data, f"sphere{radius}.obj")):
         blender.make_sphere(radius, os.path.join(data, f"sphere{radius}.obj"))
 
     chromosomes_setup = build.set_chromosomes(ptc.n_poly, ptc.l_poly, ptc.n_breaks, simBox, inscribedBox)
@@ -151,6 +156,15 @@ if __name__ == "__main__":
 
     langevin = hoomd.md.methods.Langevin(filter=group_not_tel, kT=1)
 
+    """-------------------
+    III_5 - Thermodinamics
+    -------------------"""
+    # Define thermodynamic properties computation early on
+    # hoomd can compute and log thermodynamic properties of the system,
+    # such as temperature, pressure, and energy:
+    thermodynamic_properties = hoomd.md.compute.ThermodynamicQuantities(filter=group_all)
+    simulation.operations.computes.append(thermodynamic_properties)
+
     """--------------------------------------------
     IV - Calibration - Fire
     --------------------------------------------"""
@@ -191,11 +205,6 @@ if __name__ == "__main__":
             mode='xb'
         )
         simulation.operations.writers.append(gsd_optimized_writer)
-
-        # hoomd can compute and log thermodynamic properties of the system,
-        # such as temperature, pressure, and energy:
-        thermodynamic_properties = hoomd.md.compute.ThermodynamicQuantities(filter=group_all)
-        simulation.operations.computes.append(thermodynamic_properties)
 
         print("Calibrating the system...")
         # we need to run the simulation (even if for 0 steps)
