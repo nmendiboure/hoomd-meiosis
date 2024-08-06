@@ -14,29 +14,62 @@ import src.protocol as protocol
 PI = math.pi
 
 
-def compute_rtm(simulation, telo_ids, prob: float, mag: float, manifold: hoomd.md.manifold.Manifold):
+class ComputeRTM(hoomd.custom.Action):
+    def __init__(self, telo_ids, prob, mag, manifold):
+        self.telo_ids = telo_ids
+        self.prob = prob
+        self.mag = mag
+        self.manifold = manifold
 
-    for force in simulation.operations.integrator.forces:
-        if isinstance(force, hoomd.md.force.ActiveOnManifold):
-            simulation.operations.integrator.forces.remove(force)
+    def act(self, timestep):
+        snap = self._state.get_snapshot()
+        if snap.communicator.rank == 0:
+            for force in simulation.operations.integrator.forces:
+                if isinstance(force, hoomd.md.force.ActiveOnManifold):
+                    simulation.operations.integrator.forces.remove(force)
 
-    pass
-    for telo in telo_ids:
-        if random.random() < prob:
-            one_telo = hoomd.filter.Tags([telo])
-            active_force = hoomd.md.force.ActiveOnManifold(
-                filter=one_telo,
-                manifold_constraint=manifold,
-            )
+            for telo in self.telo_ids:
+                if random.random() < self.prob:
+                    one_telo = hoomd.filter.Tags([telo])
+                    active_force = hoomd.md.force.ActiveOnManifold(
+                        filter=one_telo,
+                        manifold_constraint=self.manifold,
+                    )
 
-            dir_vec = np.random.uniform(-1, 1, 3)
-            dir_vec /= np.linalg.norm(dir_vec)
+                    force = self._get_force(self.mag)
+                    active_force.active_force["tel"] = force
+                    simulation.operations.integrator.forces.append(active_force)
 
-            # Calculate the force components
-            force = mag * dir_vec
-            active_force.active_force["tel"] = force
+    @staticmethod
+    def _get_force(mag):
+        dir_vec = np.random.uniform(-1, 1, 3)
+        dir_vec /= np.linalg.norm(dir_vec)
+        return mag * dir_vec
 
-            simulation.operations.integrator.forces.append(active_force)
+
+# def compute_rtm(simulation, telo_ids, prob: float, mag: float, manifold: hoomd.md.manifold.Manifold):
+#
+#     for force in simulation.operations.integrator.forces:
+#         if isinstance(force, hoomd.md.force.ActiveOnManifold):
+#             simulation.operations.integrator.forces.remove(force)
+#
+#     pass
+#     for telo in telo_ids:
+#         if random.random() < prob:
+#             one_telo = hoomd.filter.Tags([telo])
+#             active_force = hoomd.md.force.ActiveOnManifold(
+#                 filter=one_telo,
+#                 manifold_constraint=manifold,
+#             )
+#
+#             dir_vec = np.random.uniform(-1, 1, 3)
+#             dir_vec /= np.linalg.norm(dir_vec)
+#
+#             # Calculate the force components
+#             force = mag * dir_vec
+#             active_force.active_force["tel"] = force
+#
+#             simulation.operations.integrator.forces.append(active_force)
 
 
 if __name__ == "__main__":
@@ -113,7 +146,7 @@ if __name__ == "__main__":
     # Set up the molecular dynamics simulation
     # Define bond strength and type
     harmonic_bonds = hoomd.md.bond.Harmonic()
-    harmonic_bonds.params.default = dict(k=30, r0=1.5, epsilon=1.0, sigma=ptc.sigma)
+    harmonic_bonds.params.default = dict(k=30, r0=1., epsilon=1.0, sigma=ptc.sigma)
 
     # Define angle energy and type
     # k-parameter acting on the persistence length
@@ -134,7 +167,7 @@ if __name__ == "__main__":
     -------------------"""
     # Defined a manifold rattle to keep telomere tethered onto the nucleus surface
     sphere = hoomd.md.manifold.Sphere(r=radius, P=(0, 0, 0))
-    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=0.01)
+    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=1e-4)
 
     # Define the repulsive wall potential of the nucleus (sphere)
     walls = [hoomd.wall.Sphere(radius=radius, inside=True)]
@@ -225,6 +258,10 @@ if __name__ == "__main__":
     V - Run the simulation
     --------------------------------------------"""
 
+    rtm_action = ComputeRTM(telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
+    custom_updater = hoomd.update.CustomUpdater(action=rtm_action, trigger=hoomd.trigger.Periodic(ptc.rtm_period))
+    simulation.operations.updaters.append(custom_updater)
+
     run_integrator = hoomd.md.Integrator(
         dt=ptc.dt_langevin,
         methods=[nve_rattle_telo, langevin],
@@ -236,7 +273,7 @@ if __name__ == "__main__":
     # Define the GSD writer to take snapshots every PERIOD steps
     gsd_writer = hoomd.write.GSD(
         filename=trajectory_path,
-        trigger=hoomd.trigger.Periodic(ptc.period_trigger_run),
+        trigger=hoomd.trigger.Periodic(ptc.run_dump_period),
         dynamic=['property', 'momentum'],
         filter=group_all,
         mode='xb'
@@ -251,11 +288,7 @@ if __name__ == "__main__":
               f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
               f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}')
 
-        compute_rtm(simulation, telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
-
     print("Simulation done. \n")
 
-
-    # TODO : add RTM (Telomere Rapid Movements)
     # TODO : add synaptonemal complex formation (and disassembly)
     # TODO : extract forces and torques on each particle
