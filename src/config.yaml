@@ -1,10 +1,8 @@
 seed: 42
 n_poly: 4
-l_poly: [24, 24, 36, 36]
+l_poly: [45, 45, 60, 60]
 n_breaks: 4
 persistence_length: 30
-rtm_prob: 0.1
-rtm_magnitude: 7.
 sigma: 1.0
 blender: True
 density: 0.01
@@ -19,6 +17,10 @@ n_fire_steps: 1000
 # run
 n_run_blocks: 1000
 n_run_steps: 10000
-period_trigger_run: 100
+run_dump_period: 100
 dt_langevin: 0.001
 
+# rtm
+rtm_prob: 0.1
+rtm_magnitude: 7.
+rtm_period: 1000

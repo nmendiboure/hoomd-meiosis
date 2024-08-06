@@ -17,11 +17,12 @@ class Protocol(object):
         self.sigma = None
         self.rtm_prob = None
         self.rtm_magnitude = None
+        self.rtm_period = None
         self.n_fire_blocks = None
         self.n_fire_steps = None
         self.n_run_blocks = None
         self.n_run_steps = None
-        self.period_trigger_run = None
+        self.run_dump_period = None
         self.dt_langevin = None
         self.dt_fire = None
         self.blender = None
