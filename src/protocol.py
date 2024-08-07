@@ -14,7 +14,6 @@ class Protocol(object):
         self.n_breaks = None
         self.persistence_length = None
         self.density = None
-        self.sigma = None
         self.rtm_prob = None
         self.rtm_magnitude = None
         self.rtm_period = None
