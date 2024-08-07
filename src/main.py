@@ -47,31 +47,6 @@ class ComputeRTM(hoomd.custom.Action):
         return mag * dir_vec
 
 
-# def compute_rtm(simulation, telo_ids, prob: float, mag: float, manifold: hoomd.md.manifold.Manifold):
-#
-#     for force in simulation.operations.integrator.forces:
-#         if isinstance(force, hoomd.md.force.ActiveOnManifold):
-#             simulation.operations.integrator.forces.remove(force)
-#
-#     pass
-#     for telo in telo_ids:
-#         if random.random() < prob:
-#             one_telo = hoomd.filter.Tags([telo])
-#             active_force = hoomd.md.force.ActiveOnManifold(
-#                 filter=one_telo,
-#                 manifold_constraint=manifold,
-#             )
-#
-#             dir_vec = np.random.uniform(-1, 1, 3)
-#             dir_vec /= np.linalg.norm(dir_vec)
-#
-#             # Calculate the force components
-#             force = mag * dir_vec
-#             active_force.active_force["tel"] = force
-#
-#             simulation.operations.integrator.forces.append(active_force)
-
-
 if __name__ == "__main__":
     """--------------------------------------------
     I - Initialization
@@ -146,7 +121,7 @@ if __name__ == "__main__":
     # Set up the molecular dynamics simulation
     # Define bond strength and type
     harmonic_bonds = hoomd.md.bond.Harmonic()
-    harmonic_bonds.params.default = dict(k=30, r0=1., epsilon=1.0, sigma=ptc.sigma)
+    harmonic_bonds.params.default = dict(k=30, r0=1.0, epsilon=1.0, sigma=1.0)
 
     # Define angle energy and type
     # k-parameter acting on the persistence length
@@ -160,19 +135,19 @@ if __name__ == "__main__":
 
     nlist = hoomd.md.nlist.Cell(buffer=0.4)
     shifted_lj = hoomd.md.pair.ForceShiftedLJ(nlist=nlist, default_r_cut=2 ** (1 / 6))
-    shifted_lj.params.default = dict(epsilon=1.0, sigma=ptc.sigma, r_cut=2 ** (1 / 6))
+    shifted_lj.params.default = dict(epsilon=1.0, sigma=1.0, r_cut=2 ** (1 / 6))
 
     """-------------------
     III_3 - External Forces
     -------------------"""
     # Defined a manifold rattle to keep telomere tethered onto the nucleus surface
     sphere = hoomd.md.manifold.Sphere(r=radius, P=(0, 0, 0))
-    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=1e-4)
+    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=1)
 
     # Define the repulsive wall potential of the nucleus (sphere)
     walls = [hoomd.wall.Sphere(radius=radius, inside=True)]
     shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls=walls)
-    shifted_lj_wall.params.default = dict(epsilon=1.0, sigma=ptc.sigma, r_cut=2 ** (1 / 6))
+    shifted_lj_wall.params.default = dict(epsilon=1, sigma=1, r_cut=2 ** (1 / 6))
 
     """-------------------
     III_4 - Thermostat
