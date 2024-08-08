@@ -2,27 +2,26 @@ name: polychrom-hoomd
 channels:
     - conda-forge
 dependencies:
-    - pip
-    - python
-    - numpy
-    - scipy
+    - cython~=3.0.11
+    - cuda-version=12.6
+    - pip=24.2
+    - python=3.11.9
+    - numpy~=2.0.1
+    - scipy~=1.14
     - matplotlib
-    - pandas
+    - pandas=2.2.2
     - hoomd=*gpu*
-    - fresnel
-    - gsd
-    - joblib
+    - fresnel=0.13.6
+    - gsd~=3.3.0
+    - joblib~=1.4.2
     - pyside2
-    - ipython
+    - ipython=8.26.0
     - notebook
     - jupyter
     - pyyaml
     - requests
+    - tqdm
     - pip:
           -bpy
-          - git+https://github.com/open2c/polykit.git
-          - git+https://github.com/open2c/cooltools.git
-          - git+https://github.com/mtortora/lattice-translocators.git
-          - git+https://github.com/open2c/polychrom-hoomd.git
 
 
