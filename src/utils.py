@@ -1,5 +1,6 @@
 import sys
 import hoomd
+import gsd.hoomd
 
 
 def get_device(notice_level=3):
@@ -19,6 +20,27 @@ def get_device(notice_level=3):
         print("HOOMD is running on the CPU")
 
     return device
+
+
+def get_gsd_snapshot(snap):
+    """
+    Convert HOOMD snapshots to assignable GSD snapshots
+    """
+
+    snap_gsd = gsd.hoomd.Frame()
+
+    for attr in snap_gsd.__dict__:
+        data_gsd = getattr(snap_gsd, attr)
+
+        if hasattr(snap, attr):
+            data = getattr(snap, attr)
+
+            if hasattr(data_gsd, '__dict__'):
+                for prop in data_gsd.__dict__:
+                    if hasattr(data, prop):
+                        setattr(data_gsd, prop, getattr(data, prop))
+
+    return snap_gsd
 
 
 def is_debug() -> bool:
