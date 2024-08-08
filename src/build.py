@@ -25,19 +25,44 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
         for ll in range(size):
             homologous_pairs.append([counter + ll, counter + ll + size])
         counter += 2 * size
+
+    # Homologous and broken homologous pairs
     homologous_pairs = np.array(homologous_pairs)
+    break_ids = np.random.choice(not_telomere_ids, n_breaks, replace=False)
+    particles_typeid[break_ids] = particles_types.index('dsb')
+    homologous_break_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, break_ids))[0]]
     
     n_bonds = n_particles - n_poly
     bonds_group = np.zeros((n_bonds, 2), dtype=int)
-    bonds_types = ["dna-telo", "dna-dna", "dna-dsb", "dsb-dsb"]
-    bonds_typeid = np.array(
-        [bonds_types.index("dna-telo") if i == 0 or i == size - 2 else bonds_types.index("dna-dna")
-         for size in l_poly for i in range(size - 1)])
+    bonds_types = ["dna-tel", "dna-dna", "dna-dsb", "dsb-dsb"]
+    bonds_typeid = []
+    for i, s in enumerate(l_poly):
+        this_poly_bonds = np.zeros(s - 1, dtype=np.uint8)
+        this_poly_bonds[[0, s-2]] = bonds_types.index("dna-tel")
+        this_poly_bonds[1:s-2] = bonds_types.index("dna-dna")
+        this_poly_bonds_breaks = np.where(np.isin(np.arange(s), break_ids))[0]
+        if this_poly_bonds_breaks:
+            for b in this_poly_bonds_breaks:
+                this_poly_bonds[[b-1, b]] = bonds_types.index("dna-dsb")
+
+        bonds_typeid.extend(this_poly_bonds)
+    bonds_typeid = np.array(bonds_typeid)
     
     n_angles = n_particles - n_poly * 2
     angles_group = np.zeros((n_angles, 3), dtype=int)
-    angles_types = ["dna-dna-dna", "dna-dsb-dna"]
-    angles_typeid = np.array([angles_types.index("dna-dna-dna") for size in l_poly for i in range(size - 2)])
+    angles_types = ["tel-dna-dna", "dna-dna-dna", "dna-dsb-dna"]
+    angles_typeid = []
+    for i, s in enumerate(l_poly):
+        this_poly_angles = np.zeros(s - 2, dtype=np.uint8)
+        this_poly_angles[[0, s-3]] = angles_types.index("tel-dna-dna")
+        this_poly_angles[1:s-3] = angles_types.index("dna-dna-dna")
+        this_poly_angles_breaks = np.where(np.isin(np.arange(s), break_ids))[0]
+        if this_poly_angles_breaks:
+            for b in this_poly_angles_breaks:
+                this_poly_angles[b-1] = angles_types.index("dna-dsb-dna")
+
+        angles_typeid.extend(this_poly_angles)
+    angles_typeid = np.array(angles_typeid)
     
     # Optimizing loops for bonds and angles
     start_indices = list(np.cumsum([0] + l_poly[:-1]))
@@ -52,10 +77,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
             angles_group[a_counter] = [start + a, start + a + 1, start + a + 2]
             a_counter += 1
     
-    break_ids = np.random.choice(not_telomere_ids, n_breaks, replace=False)
-    particles_typeid[break_ids] = particles_types.index('dsb')
-    homologous_break_pairs = homologous_pairs[np.where(np.isin(homologous_pairs, break_ids))[0]]
-    
+
     frame = gsd.hoomd.Frame()
     frame.particles.N = n_particles
     frame.particles.types = particles_types
