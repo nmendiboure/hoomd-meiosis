@@ -5,6 +5,7 @@ import hoomd
 import random
 import gsd.hoomd
 import numpy as np
+from scipy.spatial.distance import cdist
 
 import src.utils as utils
 import src.build as build
@@ -45,6 +46,43 @@ class ComputeRTM(hoomd.custom.Action):
         dir_vec = np.random.uniform(-1, 1, 3)
         dir_vec /= np.linalg.norm(dir_vec)
         return mag * dir_vec
+
+
+class SynaptoMaker(hoomd.custom.Action):
+    def __init__(self, d_cut: float, kon: float, homo_pairs, homo_break_pairs, bool_paired, break_ids):
+        self.d_cut = d_cut
+        self.kon = kon
+        self.homologous_pairs = homo_pairs
+        self.homologous_break_pairs = homo_break_pairs
+        self.break_ids = break_ids
+        self.boolean_paired = bool_paired
+
+    def act(self, timestep):
+        snap = self._state.get_snapshot()
+        if snap.communicator.rank == 0:
+            particles = snap.particles.position
+            distances = cdist(particles, particles)
+
+            new_bonds_groups = []
+            new_angles_groups = []
+            new_bonds_typeid = []
+            new_angles_typeid = []
+            for h1, h2 in self.homologous_break_pairs:
+                d = distances[h1, h2]
+                if (d <= self.d_cut) and (not self.boolean_paired[(h1, h2)]):
+                    new_bonds_groups.append([h1, h2])
+                    new_angles_groups += [[h1-1, h1, h2], [h1+1, h1, h2], [h2-1, h2, h1], [h2+1, h2, h1]]
+                    new_bonds_typeid.append(snap.bonds.types.index("dsb-dsb"))
+                    new_angles_typeid += [snap.angles.types.index("dna-dsb-dsb")] * 4
+                    self.boolean_paired[(h1, h2)] = True
+
+            if new_bonds_groups:
+                new_bonds_groups = np.array(new_bonds_groups)
+                new_angles_typeid = np.array(new_angles_typeid)
+                new_angles_groups = np.array(new_angles_groups)
+                new_angles_typeid = np.array(new_angles_typeid)
+                build.update_snapshot_data(snap.bonds, new_bonds_groups, new_bonds_typeid)
+                build.update_snapshot_data(snap.angles, new_angles_groups, new_angles_typeid)
 
 
 if __name__ == "__main__":
@@ -97,9 +135,11 @@ if __name__ == "__main__":
     if ptc.blender and not os.path.exists(os.path.join(data, f"sphere{radius}.obj")):
         blender.make_sphere(radius, os.path.join(data, f"sphere{radius}.obj"))
 
-    chromosomes_setup = build.set_chromosomes(ptc.n_poly, ptc.l_poly, ptc.n_breaks, simBox, inscribedBox)
-    frame = chromosomes_setup.get('frame', None)
-    telo_ids = chromosomes_setup.get('telomeres', None)
+    frame, break_ids, homologous_pairs, homologous_break_pairs, telomere_ids, not_telomere_ids = (
+        build.set_chromosomes(ptc.n_poly, ptc.l_poly, ptc.n_breaks, simBox, inscribedBox))
+
+    bool_homologus_paired = {(k1, k2): False for k1, k2 in homologous_pairs}
+
     with gsd.hoomd.open(name=lattice_init_path, mode='x') as f:
         f.append(frame)
 
@@ -121,13 +161,19 @@ if __name__ == "__main__":
     # Set up the molecular dynamics simulation
     # Define bond strength and type
     harmonic_bonds = hoomd.md.bond.Harmonic()
-    harmonic_bonds.params.default = dict(k=30, r0=1.0, epsilon=1.0, sigma=1.0)
+    harmonic_bonds.params['dna-tel'] = {"k": 30, "r0": 1.0}
+    harmonic_bonds.params['dna-dna'] = {"k": 30, "r0": 1.0}
+    harmonic_bonds.params['dna-dsb'] = {"k": 30, "r0": 1.0}
+    harmonic_bonds.params['dsb-dsb'] = {"k": 10, "r0": 1.5}
+
 
     # Define angle energy and type
     # k-parameter acting on the persistence length
     harmonic_angles = hoomd.md.angle.Harmonic()
     harmonic_angles.params['dna-dna-dna'] = dict(k=ptc.persistence_length, t0=PI)
     harmonic_angles.params['dna-dsb-dna'] = dict(k=ptc.persistence_length, t0=PI)
+    harmonic_angles.params['tel-dna-dna'] = dict(k=1., t0=PI)
+    harmonic_angles.params['dna-dsb-dsb'] = dict(k=1., t0=PI/2)
 
     """-------------------
     III_2 - Pairwise Forces
@@ -147,7 +193,7 @@ if __name__ == "__main__":
     # Define the repulsive wall potential of the nucleus (sphere)
     walls = [hoomd.wall.Sphere(radius=radius, inside=True)]
     shifted_lj_wall = hoomd.md.external.wall.ForceShiftedLJ(walls=walls)
-    shifted_lj_wall.params.default = dict(epsilon=1, sigma=1, r_cut=2 ** (1 / 6))
+    shifted_lj_wall.params.default = dict(epsilon=1, sigma=1, r_cut=2**(1 / 6))
 
     """-------------------
     III_4 - Thermostat
@@ -233,9 +279,39 @@ if __name__ == "__main__":
     V - Run the simulation
     --------------------------------------------"""
 
-    rtm_action = ComputeRTM(telo_ids, ptc.rtm_prob, ptc.rtm_magnitude, sphere)
-    custom_updater = hoomd.update.CustomUpdater(action=rtm_action, trigger=hoomd.trigger.Periodic(ptc.rtm_period))
-    simulation.operations.updaters.append(custom_updater)
+    """-------------------
+    V_1 - RTM Updater
+    -------------------"""
+
+    rtm_action = ComputeRTM(
+        telo_ids=telomere_ids,
+        prob=ptc.rtm_prob,
+        mag=ptc.rtm_magnitude,
+        manifold=sphere
+    )
+    rtm_custom_updater = hoomd.update.CustomUpdater(
+        action=rtm_action,
+        trigger=hoomd.trigger.Periodic(ptc.rtm_period)
+    )
+    simulation.operations.updaters.append(rtm_custom_updater)
+
+    """------------------------
+    V_2 - Synaptonemal Updater
+    -------------------------"""
+
+    synaptomaker_action = SynaptoMaker(
+        d_cut=10,
+        kon=1.,
+        homo_pairs=homologous_pairs,
+        homo_break_pairs=homologous_break_pairs,
+        bool_paired=bool_homologus_paired,
+        break_ids=break_ids
+    )
+    synaptomaker_updater = hoomd.update.CustomUpdater(
+        action=synaptomaker_action,
+        trigger=hoomd.trigger.Periodic(ptc.rtm_period)
+    )
+    simulation.operations.updaters.append(synaptomaker_updater)
 
     run_integrator = hoomd.md.Integrator(
         dt=ptc.dt_langevin,
