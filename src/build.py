@@ -50,7 +50,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
     
     n_angles = n_particles - n_poly * 2
     angles_group = np.zeros((n_angles, 3), dtype=int)
-    angles_types = ["tel-dna-dna", "dna-dna-dna", "dna-dsb-dna"]
+    angles_types = ["tel-dna-dna", "dna-dna-dna", "dna-dsb-dna", "dna-dsb-dsb"]
     angles_typeid = []
     for i, s in enumerate(l_poly):
         this_poly_angles = np.zeros(s - 2, dtype=np.uint8)
@@ -105,3 +105,19 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
     print(f"HOOMD frame with box size {simBoxSize} generated \n")
 
     return frame, break_ids, homologous_pairs, homologous_break_pairs, telomere_ids, not_telomere_ids
+
+
+def update_snapshot_data(snapshot_data, new_groups, new_typeids):
+
+    number_of_entries = len(new_groups)
+
+    groups = snapshot_data.group if snapshot_data.N else []
+    groups = list(groups) + list(new_groups)
+    snapshot_data.group = np.asarray(groups, dtype=np.uint32)
+
+    typeids = snapshot_data.typeid if snapshot_data.N else []
+    typeids = list(typeids) + list(new_typeids)
+    snapshot_data.typeid = np.asarray(typeids, dtype=np.uint32)
+
+    snapshot_data.N += number_of_entries
+
