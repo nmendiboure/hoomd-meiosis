@@ -1,7 +1,7 @@
 seed: 42
 n_poly: 4
-l_poly: [100, 100, 150, 150]
-n_breaks: 4
+l_poly: [40, 40, 50, 50]
+n_breaks: 24
 persistence_length: 10.
 blender: True
 density: 0.01
@@ -9,7 +9,7 @@ notice_level: 3
 
 # fire
 dt_fire: 0.0005
-force_fire: True
+force_fire: False
 n_fire_blocks: 120
 n_fire_steps: 1000
 
@@ -20,6 +20,6 @@ run_dump_period: 100
 dt_langevin: 0.001
 
 # rtm
-rtm_prob: 0.1
+rtm_prob: 0.25
 rtm_magnitude: 7.5
 rtm_period: 1000
