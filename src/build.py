@@ -41,7 +41,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
         this_poly_bonds[[0, s-2]] = bonds_types.index("dna-tel")
         this_poly_bonds[1:s-2] = bonds_types.index("dna-dna")
         this_poly_bonds_breaks = np.where(np.isin(np.arange(s), break_ids))[0]
-        if this_poly_bonds_breaks:
+        if len(this_poly_bonds_breaks) > 0:
             for b in this_poly_bonds_breaks:
                 this_poly_bonds[[b-1, b]] = bonds_types.index("dna-dsb")
 
@@ -57,7 +57,7 @@ def set_chromosomes(n_poly: int, l_poly: list[int], n_breaks: int, simBoxSize: i
         this_poly_angles[[0, s-3]] = angles_types.index("tel-dna-dna")
         this_poly_angles[1:s-3] = angles_types.index("dna-dna-dna")
         this_poly_angles_breaks = np.where(np.isin(np.arange(s), break_ids))[0]
-        if this_poly_angles_breaks:
+        if len(this_poly_angles_breaks) > 0:
             for b in this_poly_angles_breaks:
                 this_poly_angles[b-1] = angles_types.index("dna-dsb-dna")
 
