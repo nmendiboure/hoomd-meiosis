@@ -24,7 +24,7 @@ def get_device(notice_level=3):
 
 def get_gsd_snapshot(snap):
     """
-    Convert HOOMD snapshots to assignable GSD snapshots
+    Convert HOOMD snapshots to assignable GSD snapshots, including private attributes.
     """
 
     snap_gsd = gsd.hoomd.Frame()
@@ -39,6 +39,9 @@ def get_gsd_snapshot(snap):
                 for prop in data_gsd.__dict__:
                     if hasattr(data, prop):
                         setattr(data_gsd, prop, getattr(data, prop))
+                    elif hasattr(data, f"{prop.lstrip('_')}"):
+                        # If a private attribute, get it with leading underscore
+                        setattr(data_gsd, prop, getattr(data, f"{prop.lstrip('_')}"))
 
     return snap_gsd
 
