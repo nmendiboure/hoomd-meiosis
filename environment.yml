@@ -22,6 +22,6 @@ dependencies:
     - requests
     - tqdm
     - pip:
-          - bpy
+          - bpy==4.1.0
 
 
