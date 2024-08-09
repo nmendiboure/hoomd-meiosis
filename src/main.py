@@ -59,8 +59,10 @@ class SynaptoMaker(hoomd.custom.Action):
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
+        snap_gsd = utils.get_gsd_snapshot(snap)
         if snap.communicator.rank == 0:
-            particles = snap.particles.position
+
+            particles = snap_gsd.particles.position
             distances = cdist(particles, particles)
 
             new_bonds_groups = []
@@ -72,17 +74,21 @@ class SynaptoMaker(hoomd.custom.Action):
                 if (d <= self.d_cut) and (not self.boolean_paired[(h1, h2)]):
                     new_bonds_groups.append([h1, h2])
                     new_angles_groups += [[h1-1, h1, h2], [h1+1, h1, h2], [h2-1, h2, h1], [h2+1, h2, h1]]
-                    new_bonds_typeid.append(snap.bonds.types.index("dsb-dsb"))
-                    new_angles_typeid += [snap.angles.types.index("dna-dsb-dsb")] * 4
+                    new_bonds_typeid.append(snap_gsd.bonds.types.index("dsb-dsb"))
+                    new_angles_typeid += [snap_gsd.angles.types.index("dna-dsb-dsb")] * 4
                     self.boolean_paired[(h1, h2)] = True
+                    print(f"New bond formed between particles {h1} and {h2}.")
 
             if new_bonds_groups:
                 new_bonds_groups = np.array(new_bonds_groups)
                 new_angles_typeid = np.array(new_angles_typeid)
                 new_angles_groups = np.array(new_angles_groups)
                 new_angles_typeid = np.array(new_angles_typeid)
-                build.update_snapshot_data(snap.bonds, new_bonds_groups, new_bonds_typeid)
-                build.update_snapshot_data(snap.angles, new_angles_groups, new_angles_typeid)
+                build.update_snapshot_data(snap_gsd.bonds, new_bonds_groups, new_bonds_typeid)
+                build.update_snapshot_data(snap_gsd.angles, new_angles_groups, new_angles_typeid)
+
+                snap = hoomd.Snapshot.from_gsd_frame(snap_gsd, snap.communicator)
+                self._state.set_snapshot(snap)
 
 
 if __name__ == "__main__":
@@ -161,24 +167,22 @@ if __name__ == "__main__":
     # Set up the molecular dynamics simulation
     # Define bond strength and type
     harmonic_bonds = hoomd.md.bond.Harmonic()
-    harmonic_bonds.params['dna-tel'] = {"k": 30, "r0": 1.0}
+    harmonic_bonds.params['dna-tel'] = {"k": 50, "r0": 1.0}
     harmonic_bonds.params['dna-dna'] = {"k": 30, "r0": 1.0}
     harmonic_bonds.params['dna-dsb'] = {"k": 30, "r0": 1.0}
     harmonic_bonds.params['dsb-dsb'] = {"k": 10, "r0": 1.5}
-
 
     # Define angle energy and type
     # k-parameter acting on the persistence length
     harmonic_angles = hoomd.md.angle.Harmonic()
     harmonic_angles.params['dna-dna-dna'] = dict(k=ptc.persistence_length, t0=PI)
     harmonic_angles.params['dna-dsb-dna'] = dict(k=ptc.persistence_length, t0=PI)
-    harmonic_angles.params['tel-dna-dna'] = dict(k=1., t0=PI)
-    harmonic_angles.params['dna-dsb-dsb'] = dict(k=1., t0=PI/2)
+    harmonic_angles.params['tel-dna-dna'] = dict(k=ptc.persistence_length, t0=PI)
+    harmonic_angles.params['dna-dsb-dsb'] = dict(k=ptc.persistence_length/2, t0=PI/2)
 
     """-------------------
     III_2 - Pairwise Forces
     -------------------"""
-
     nlist = hoomd.md.nlist.Cell(buffer=0.4)
     shifted_lj = hoomd.md.pair.ForceShiftedLJ(nlist=nlist, default_r_cut=2 ** (1 / 6))
     shifted_lj.params.default = dict(epsilon=1.0, sigma=1.0, r_cut=2 ** (1 / 6))
@@ -188,7 +192,12 @@ if __name__ == "__main__":
     -------------------"""
     # Defined a manifold rattle to keep telomere tethered onto the nucleus surface
     sphere = hoomd.md.manifold.Sphere(r=radius, P=(0, 0, 0))
-    nve_rattle_telo = hoomd.md.methods.rattle.NVE(filter=group_telo, manifold_constraint=sphere, tolerance=1)
+    lgv_rattle_telo = hoomd.md.methods.rattle.Langevin(
+        kT=1.,
+        filter=group_telo,
+        manifold_constraint=sphere,
+        tolerance=2
+    )
 
     # Define the repulsive wall potential of the nucleus (sphere)
     walls = [hoomd.wall.Sphere(radius=radius, inside=True)]
@@ -199,7 +208,9 @@ if __name__ == "__main__":
     III_4 - Thermostat
     -------------------"""
 
+    # langevin = hoomd.md.methods.Langevin(filter=group_all, kT=1)
     langevin = hoomd.md.methods.Langevin(filter=group_not_telo, kT=1)
+
 
     """-------------------
     III_5 - Thermodinamics
@@ -300,7 +311,7 @@ if __name__ == "__main__":
     -------------------------"""
 
     synaptomaker_action = SynaptoMaker(
-        d_cut=10,
+        d_cut=1.2,
         kon=1.,
         homo_pairs=homologous_pairs,
         homo_break_pairs=homologous_break_pairs,
@@ -309,13 +320,13 @@ if __name__ == "__main__":
     )
     synaptomaker_updater = hoomd.update.CustomUpdater(
         action=synaptomaker_action,
-        trigger=hoomd.trigger.Periodic(ptc.rtm_period)
+        trigger=hoomd.trigger.Periodic(1000)
     )
     simulation.operations.updaters.append(synaptomaker_updater)
 
     run_integrator = hoomd.md.Integrator(
         dt=ptc.dt_langevin,
-        methods=[nve_rattle_telo, langevin],
+        methods=[lgv_rattle_telo, langevin],
         forces=[harmonic_bonds, harmonic_angles, shifted_lj, shifted_lj_wall]
     )
 
@@ -335,9 +346,11 @@ if __name__ == "__main__":
     for i in range(0, ptc.n_run_blocks):
         start = time.time()
         simulation.run(ptc.n_run_steps)
-        print(f'block #{i+1} / {ptc.n_run_blocks}, '
-              f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
-              f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}')
+        print(
+            f'block #{i+1} / {ptc.n_run_blocks}, '
+            f''f'kin temp = {thermodynamic_properties.kinetic_temperature:.3g}, '
+            f'E_P/N = {thermodynamic_properties.potential_energy / n_particles:.3g}'
+        )
 
     print("Simulation done. \n")
 
