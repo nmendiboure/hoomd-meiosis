@@ -1,4 +1,4 @@
-name: polychrom-hoomd
+name: hoomd-meiosis-env
 channels:
     - conda-forge
 dependencies:
@@ -10,7 +10,7 @@ dependencies:
     - scipy~=1.14
     - matplotlib
     - pandas=2.2.2
-    - hoomd=*gpu*
+    - hoomd=4.8.2=*gpu*
     - fresnel=0.13.6
     - gsd~=3.3.0
     - joblib~=1.4.2
@@ -22,6 +22,6 @@ dependencies:
     - requests
     - tqdm
     - pip:
-          -bpy
+          - bpy
 
 

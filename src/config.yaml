@@ -9,7 +9,7 @@ notice_level: 3
 
 # fire
 dt_fire: 0.0005
-force_fire: False
+force_fire: True
 n_fire_blocks: 120
 n_fire_steps: 1000
 
